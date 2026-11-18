@@ -38,18 +38,21 @@ cc-hub turns [Claude Code](https://code.claude.com) into a team: a **lead** sess
 
 ## Quick start
 
-**Windows laptop (WSL):** one command in PowerShell does everything, including Obsidian, start-at-login, and phone access. See **[docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md)**.
+One command does the entire setup: dependencies, local Postgres, Claude Code, tokens, the Obsidian vault, start-at-login, and (on Windows) Obsidian and Tailscale for phone access.
 
-**Ubuntu / Debian (or inside WSL by hand):**
-
-```bash
-git clone https://github.com/<you>/cc-hub && cd cc-hub
-./scripts/setup.sh      # installs what's missing, local Postgres, Claude Code, .env with tokens, vault
-claude                  # once: /login, then /exit
-./scripts/start.sh      # the lead session starts automatically
+**Windows (PowerShell, not admin):**
+```powershell
+irm https://raw.githubusercontent.com/Roenan-b/cc-hub/main/install.ps1 | iex
 ```
 
-Open http://127.0.0.1:8787 and sign in with the admin token the setup printed. Requirements are installed by the setup script: Node 20+, tmux, git, Postgres, and Claude Code **2.1.80+**. Channels are a Claude Code research preview; on Team/Enterprise plans an admin must enable them.
+**Ubuntu / Debian / inside WSL:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Roenan-b/cc-hub/main/install.sh | bash
+```
+
+You'll be asked for your sudo password, which folders agents may work in, and to `/login` to Claude Code once. Re-run the same command to update. Using a fork? Set `CCHUB_REPO=<you>/cc-hub` first (`$env:CCHUB_REPO = "<you>/cc-hub"` in PowerShell). Read the installer before piping it to a shell; it is short.
+
+Requirements are installed for you: Node 20+, tmux, git, Postgres, and Claude Code **2.1.80+**. Channels are a Claude Code research preview; on Team/Enterprise plans an admin must enable them. Windows details: **[docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md)**.
 
 **Always-on server or Docker:** see **[docs/DEPLOY.md](docs/DEPLOY.md)** (systemd, Docker, Tailscale, Cloudflare Access).
 

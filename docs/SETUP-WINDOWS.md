@@ -4,17 +4,21 @@ This runs cc-hub on your own Windows computer, inside WSL (Ubuntu). The team wor
 
 ## One-command setup
 
-1. Download `cc-hub.zip` (or a ZIP of your GitHub repo) to your **Downloads** folder.
-2. Open **PowerShell** (normal, not admin) and paste:
+Open **PowerShell** (normal, not admin) and paste:
 
 ```powershell
-$z = Get-ChildItem "$HOME\Downloads\cc-hub*.zip" | Sort-Object LastWriteTime -Descending | Select-Object -First 1; "Using $($z.Name) ($([math]::Round($z.Length/1KB)) KB, $($z.LastWriteTime))"; $d = "$env:TEMP\cc-hub-src"; Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue; Expand-Archive $z.FullName $d; $b = Get-ChildItem $d -Recurse -Filter bootstrap.ps1 | Select-Object -First 1; if ($b) { powershell -ExecutionPolicy Bypass -File $b.FullName } else { "That zip is an older version without the Windows installer. Download the newest cc-hub.zip and run this again." }
-```
+irm https://raw.githubusercontent.com/Roenan-b/cc-hub/main/install.ps1 | iex
 ```
 
-Already cloned the repo somewhere on Windows? Run `powershell -ExecutionPolicy Bypass -File <repo>\deploy\windows\bootstrap.ps1` instead.
+(Fork? Run `$env:CCHUB_REPO = "<you>/cc-hub"` first.)
 
-It asks you for three things:
+Offline or from a downloaded ZIP instead: put `cc-hub.zip` in Downloads and run
+
+```powershell
+$z = Get-ChildItem "$HOME\Downloads\cc-hub*.zip" | Sort-Object LastWriteTime -Descending | Select-Object -First 1; $d = "$env:TEMP\cc-hub-src"; Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue; Expand-Archive $z.FullName $d; $b = Get-ChildItem $d -Recurse -Filter bootstrap.ps1 | Select-Object -First 1; if ($b) { powershell -ExecutionPolicy Bypass -File $b.FullName } else { "That zip is an older version without the Windows installer. Download the newest cc-hub.zip and run this again." }
+```
+
+It asks you for a few things:
 
 | Prompt | What to enter |
 |---|---|
