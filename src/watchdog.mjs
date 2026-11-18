@@ -130,11 +130,24 @@ async function digest() {
   }
 }
 
+let lastSyncProblem = '';
 async function commitVault() {
   try {
-    const n = await git.autocommit(config.vault, `cc-hub autocommit ${new Date().toISOString()}`);
-    if (n) core.log(`vault: committed ${n} changed paths`);
-  } catch (e) { core.log(`vault autocommit failed: ${e.message}`); }
+    if (!config.vaultRemote) {
+      const n = await git.autocommit(config.vault, `cc-hub autocommit ${new Date().toISOString()}`);
+      if (n) core.log(`vault: committed ${n} changed paths`);
+      return;
+    }
+    const r = await git.syncVault(config.vault, config.vaultRemote);
+    if (r.committed) core.log(`vault: committed ${r.committed} changed paths`);
+    if (r.ok) { lastSyncProblem = ''; return; }
+    core.log(`vault sync: ${r.error}`);
+    if (r.error !== lastSyncProblem) { // tell the human once per distinct problem
+      lastSyncProblem = r.error;
+      const msg = await db.insertMessage({ sender: 'hub', recipient: 'user', kind: 'system', body: `Vault sync problem: ${r.error}` });
+      core.broadcastUI({ type: 'message', msg });
+    }
+  } catch (e) { core.log(`vault commit/sync failed: ${e.message}`); }
 }
 
 export function start() {

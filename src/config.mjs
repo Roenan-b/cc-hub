@@ -44,6 +44,9 @@ export const config = {
   // Obsidian vault shared by every session (the curated "brain").
   vault: path.resolve(expandHome(env.HUB_VAULT || '~/Vault')),
   vaultAutocommitMin: num(env.HUB_VAULT_AUTOCOMMIT_MIN, 5),
+  // Optional git remote (e.g. git@github.com:you/vault.git, a PRIVATE repo) the
+  // vault syncs with on every autocommit, so Obsidian elsewhere stays current.
+  vaultRemote: env.HUB_VAULT_REMOTE || '',
   claudeBin: env.CLAUDE_BIN || 'claude',
   nodeBin: env.NODE_BIN || process.execPath,
   allowBypassPermissions: env.HUB_ALLOW_BYPASS === '1',

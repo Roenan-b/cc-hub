@@ -6,12 +6,14 @@
 #   sudo loginctl enable-linger "$USER"     # keep running after logout / on boot
 [Unit]
 Description=cc-hub (Claude Code team hub)
-After=network-online.target docker.service
+After=network-online.target postgresql.service docker.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
 WorkingDirectory=%CCHUB_DIR%
-ExecStartPre=/usr/bin/env docker compose up -d --wait db
+# Starts Docker Postgres if you use it; ignored (leading '-') with a local Postgres service.
+ExecStartPre=-/bin/sh -c '. ./.env; [ "$${CCHUB_DOCKER_DB:-1}" = 1 ] && docker compose up -d --wait db || true'
 ExecStart=/usr/bin/env node src/hub.mjs
 Restart=on-failure
 RestartSec=5

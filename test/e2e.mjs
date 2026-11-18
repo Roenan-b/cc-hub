@@ -26,7 +26,8 @@ const ADMIN = 'admin-token-0123456789-abcdefghij';
 const OBSERVER = 'observer-token-0123456789-abcdefg';
 const SOCKET = `cchub-test-${process.pid}`;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cchub-test-'));
-const dirs = { state: path.join(tmp, 'state'), vault: path.join(tmp, 'vault'), work: path.join(tmp, 'work') };
+const dirs = { state: path.join(tmp, 'state'), vault: path.join(tmp, 'vault'), work: path.join(tmp, 'work'), remote: path.join(tmp, 'vault-remote.git') };
+execFileSync('git', ['init', '-q', '--bare', '-b', 'main', path.join(tmp, 'vault-remote.git')]);
 fs.mkdirSync(dirs.work, { recursive: true });
 
 // A git repo for worktree tests.
@@ -135,6 +136,12 @@ try {
     assert.equal(tasks.find((t) => t.id === t2.id).deps_done, false);
   });
 
+  await step('human profile from the vault reaches new sessions', async () => {
+    fs.mkdirSync(path.join(dirs.vault, 'Me'), { recursive: true });
+    fs.writeFileSync(path.join(dirs.vault, 'Me', 'Working with me.md'), '---\ntype: x\n---\n# Working with me\nPROFILE-TEST-MARKER: never use em dashes.\n');
+    fs.writeFileSync(path.join(dirs.vault, 'Me', 'About me.md'), '# About me\n');
+  });
+
   await step('lead spawns an engineer in an isolated git worktree', async () => {
     const r = await callAs('orchestrator', 'spawn_session', {
       name: 'eng1', template: 'engineer', repo, branch: 'feature/parser', prompt: `Your task is #${t1.id}.`,
@@ -147,6 +154,7 @@ try {
     const p = pane('eng1');
     assert.match(p, /TOOLS reply,send_message,list_sessions,search_history,read_history,request_approval,project_list,task_list,task_get,task_create,task_update\n/);
     assert.match(p, /from":"orchestrator"/); // first prompt delivered after connect
+    assert.match(p, /profile=true/, 'operating profile appended to system prompt');
   });
 
   await step('assignment notifies the worker', async () => {
@@ -222,6 +230,21 @@ try {
     await until(() => execFileSync('git', ['-C', dirs.vault, 'log', '--oneline']).toString().includes('autocommit'), 'vault commit', 30000);
   });
 
+  await step('vault syncs both ways with its git remote', async () => {
+    const log = () => execFileSync('git', ['--git-dir', dirs.remote, 'log', '--oneline', 'main']).toString();
+    await until(() => { try { return log().includes('autocommit'); } catch { return false; } }, 'vault pushed to remote', 30000);
+    // Another device (e.g. Obsidian on a laptop) pushes a note; the hub should pull it in.
+    const other = path.join(tmp, 'other-device');
+    execFileSync('git', ['clone', '-q', dirs.remote, other]);
+    fs.writeFileSync(path.join(other, 'From laptop.md'), '# written elsewhere\n');
+    execFileSync('git', ['-C', other, '-c', 'user.name=t', '-c', 'user.email=t@t', 'add', '.']);
+    execFileSync('git', ['-C', other, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'laptop note']);
+    execFileSync('git', ['-C', other, 'push', '-q', 'origin', 'main']);
+    fs.writeFileSync(path.join(dirs.vault, 'From hub.md'), '# written by an agent\n');
+    await until(() => fs.existsSync(path.join(dirs.vault, 'From laptop.md')) && log().includes('laptop note'), 'remote change pulled into vault', 30000);
+    await until(() => execFileSync('git', ['--git-dir', dirs.remote, 'show', 'main:From hub.md']).toString().includes('agent'), 'local change pushed', 30000);
+  });
+
   await step('observer can read the dashboard but not messages or controls', async () => {
     const d = await api('/api/dashboard', { token: OBSERVER });
     assert.equal(d.status, 200);
@@ -294,6 +317,6 @@ function hubEnv() {
     HUB_STATE_DIR: dirs.state, HUB_VAULT: dirs.vault, HUB_WORKSPACE_ROOTS: dirs.work,
     CLAUDE_BIN: path.join(ROOT, 'test', 'fake-claude'), HUB_TMUX_SOCKET: SOCKET,
     HUB_HEARTBEAT_MIN: '0.1', HUB_SCAN_SEC: '2', HUB_STALL_MIN: '60', HUB_VAULT_AUTOCOMMIT_MIN: '0.1',
-    HUB_MAX_WORKERS: '3', HUB_DIGEST_HOUR: '-1',
+    HUB_MAX_WORKERS: '3', HUB_DIGEST_HOUR: '-1', HUB_VAULT_REMOTE: dirs.remote,
   };
 }

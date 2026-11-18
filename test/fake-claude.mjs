@@ -21,7 +21,7 @@ const { StdioClientTransport } = await req('@modelcontextprotocol/sdk/dist/esm/c
 
 const args = process.argv.slice(2);
 const flag = (f) => (args.includes(f) ? args[args.indexOf(f) + 1] : null);
-console.log(`ARGV mcp=${!!flag('--mcp-config')} channels=${flag('--dangerously-load-development-channels')} append_prompt=${!!flag('--append-system-prompt')} add_dir=${flag('--add-dir')} settings=${!!flag('--settings')} mode=${flag('--permission-mode') || 'default'}`);
+console.log(`ARGV mcp=${!!flag('--mcp-config')} channels=${flag('--dangerously-load-development-channels')} append_prompt=${!!flag('--append-system-prompt')} add_dir=${flag('--add-dir')} settings=${!!flag('--settings')} profile=${(flag('--append-system-prompt') || '').includes('PROFILE-TEST-MARKER')} mode=${flag('--permission-mode') || 'default'}`);
 console.log('WARNING: Loading development channels\n\n  ❯ 1. I am using this for local development\n    2. Exit');
 await new Promise((r) => { const rl = readline.createInterface({ input: process.stdin }); rl.once('line', () => { rl.close(); r(); }); });
 console.log('accepted');
