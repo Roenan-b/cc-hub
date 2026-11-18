@@ -20,5 +20,12 @@
     "ws": "^8.18.0",
     "zod": "^3.23.8"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "markdownlint-cli2": "^0.24.1",
+    "prettier": "^3.10.1"
+  }
 }

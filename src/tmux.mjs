@@ -19,7 +19,7 @@ async function tmux(args, { allowFail = false } = {}) {
     return stdout;
   } catch (err) {
     if (allowFail) return null;
-    throw new Error(`tmux ${args[0]} failed: ${(err.stderr || err.message).trim()}`);
+    throw new Error(`tmux ${args[0]} failed: ${(err.stderr || err.message).trim()}`, { cause: err });
   }
 }
 
