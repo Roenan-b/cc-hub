@@ -19,7 +19,29 @@ let lastDigestDay = '';
 const USAGE_RE = /(usage limit|limit reached|rate limit|out of (extra )?usage|resets at)/i;
 const DIALOG_RE = /(Do you want to|Would you like to|❯\s*1\.\s*Yes)/;
 
+let lastScanAt = Date.now();
+
+/**
+ * A laptop that slept leaves a gap between scans. Without this, every session
+ * would look stalled on wake and the lead would restart healthy workers.
+ */
+async function detectWake() {
+  const now = Date.now();
+  const gap = now - lastScanAt;
+  lastScanAt = now;
+  const expected = Math.max(1, config.scanSec) * 1000;
+  if (gap < expected * 3 + 60_000) return;
+  const mins = Math.round(gap / 60_000);
+  core.log(`wake detected: ~${mins} min gap; resetting activity timers`);
+  await db.pool.query("UPDATE sessions SET last_activity = now() WHERE status <> 'stopped'");
+  lastHeartbeat = { at: Date.now(), summary: '' };
+  for (const l of await core.leadNames()) {
+    await core.notify(l, `The machine was asleep for about ${mins} minute${mins === 1 ? "" : "s"}. Sessions were paused, not stopped; any step that was mid-request may have failed and been retried. Check the board, peek any worker whose task looks stuck, and carry on. No need to message the user unless something needs their decision.`);
+  }
+}
+
 async function scanPanes() {
+  await detectWake();
   for (const s of await db.listSessions()) {
     if (s.status === 'stopped') continue;
     const pane = await tmux.capturePane(s.name, 40);

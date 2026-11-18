@@ -38,19 +38,22 @@ cc-hub turns [Claude Code](https://code.claude.com) into a team: a **lead** sess
 
 ## Quick start
 
-Requirements: Linux or macOS, Node 20+, tmux, git, Docker (for Postgres), and Claude Code **2.1.80+** signed in (`claude` once, then `/login`). Channels are a Claude Code research preview; on Team/Enterprise plans an admin must enable them.
+**Windows laptop (WSL):** one command in PowerShell does everything, including Obsidian, start-at-login, and phone access. See **[docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md)**.
+
+**Ubuntu / Debian (or inside WSL by hand):**
 
 ```bash
 git clone https://github.com/<you>/cc-hub && cd cc-hub
-npm ci
-./scripts/start.sh        # first run: writes .env with random tokens and prints them
-$EDITOR .env              # set HUB_WORKSPACE_ROOTS (where your repos live) and HUB_VAULT
-./scripts/start.sh        # starts Postgres + the hub; the lead session starts automatically
+./scripts/setup.sh      # installs what's missing, local Postgres, Claude Code, .env with tokens, vault
+claude                  # once: /login, then /exit
+./scripts/start.sh      # the lead session starts automatically
 ```
 
-Open http://127.0.0.1:8787 and sign in with the admin token. To use it from your phone or keep it up 24/7, see **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Open http://127.0.0.1:8787 and sign in with the admin token the setup printed. Requirements are installed by the setup script: Node 20+, tmux, git, Postgres, and Claude Code **2.1.80+**. Channels are a Claude Code research preview; on Team/Enterprise plans an admin must enable them.
 
-Prefer containers? `docker compose --profile docker up -d --build`, then log Claude Code in once with `docker compose exec -it hub claude`. Details in the deploy guide.
+**Always-on server or Docker:** see **[docs/DEPLOY.md](docs/DEPLOY.md)** (systemd, Docker, Tailscale, Cloudflare Access).
+
+The hub survives sleep and reboots: on wake it resets stall timers instead of restarting healthy workers, and after a reboot it restarts the workers that were running and briefs the lead.
 
 ## Your first project
 
@@ -117,7 +120,7 @@ src/vault.mjs      vault and project scaffolding
 db/schema.sql      Postgres schema (applied on every start, idempotent)
 public/index.html  dashboard, boards, chat, approvals (no build step)
 roles/             role briefs   settings/   permission presets   vault-template/
-deploy/            systemd unit  docs/       deployment and security
+deploy/            systemd unit, Windows bootstrap and autostart   docs/   setup, deployment
 test/              end-to-end suite with a stand-in Claude CLI
 ```
 

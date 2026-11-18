@@ -41,6 +41,8 @@ export async function addWorktree({ repo, branch, dest, base = 'HEAD' }) {
 export async function ensureVaultRepo(vault) {
   if (await isRepo(vault)) return;
   await git(vault, ['init', '-q']);
+  // Vaults on a Windows drive (/mnt/c under WSL) report bogus mode changes.
+  await git(vault, ['config', 'core.filemode', 'false']);
   await git(vault, [...IDENT, 'add', '-A']);
   await git(vault, [...IDENT, 'commit', '-q', '-m', 'cc-hub: initial vault']).catch(() => {});
 }

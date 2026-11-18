@@ -250,13 +250,29 @@ try {
     await until(async () => (await api('/api/sessions')).data?.find?.((s) => s.name === 'eng1' && s.connected), 'eng1 reconnected', 30000);
     await until(async () => (await thread('eng1')).find((m) => m.body === 'echo: sent while hub down'), 'queued delivery');
   });
+
+  await step('machine power-off: lead and workers resume, lead is briefed', async () => {
+    globalThis.hub2.kill('SIGTERM');
+    execFileSync('tmux', ['-L', SOCKET, 'kill-server'], { stdio: 'ignore' }); // every session dies, like a reboot
+    await sleep(500);
+    globalThis.hub3 = spawn(process.execPath, [path.join(ROOT, 'src', 'hub.mjs')], { env: { ...process.env, ...hubEnv() }, stdio: 'ignore' });
+    await until(async () => {
+      const ss = (await api('/api/sessions')).data;
+      return Array.isArray(ss) && ['orchestrator', 'eng1', 'rev1', 'w3'].every((n) => ss.find((x) => x.name === n && x.connected));
+    }, 'all sessions back online', 40000);
+    await until(async () => (await thread('orchestrator')).find((m) => m.sender === 'hub' && m.body.startsWith('The hub restarted after downtime') && m.body.includes('eng1') && m.delivered_at), 'lead briefing');
+    await until(async () => (await thread('eng1')).find((m) => m.body.startsWith('You were restarted with a fresh context') && m.delivered_at), 'worker resume prompt');
+    assert.ok(fs.existsSync(path.join(dirs.state, 'worktrees', 'eng1', 'README.md')), 'worktree reused');
+    const s = (await api('/api/sessions')).data.find((x) => x.name === 'eng1');
+    assert.equal(s.worktree.branch, 'feature/parser');
+  });
 } finally {
   if (process.env.CCHUB_TEST_KEEP === '1') {
     console.log(`\n${passed} passed, ${failed} failed. Keeping the demo hub up at ${BASE} (admin token ${ADMIN}). Ctrl-C to stop.`);
     process.on('SIGINT', () => cleanup(0));
     await new Promise(() => {});
   }
-  for (const p of [hub, globalThis.hub2]) try { p?.kill('SIGTERM'); } catch {}
+  for (const p of [hub, globalThis.hub2, globalThis.hub3]) try { p?.kill('SIGTERM'); } catch {}
   try { execFileSync('tmux', ['-L', SOCKET, 'kill-server'], { stdio: 'ignore' }); } catch {}
   await pool.end();
   if (failed) console.log(`\n--- hub log ---\n${hubLog.slice(-4000)}`);
@@ -266,7 +282,7 @@ try {
 }
 
 function cleanup(code) {
-  for (const p of [hub, globalThis.hub2]) try { p?.kill('SIGTERM'); } catch {}
+  for (const p of [hub, globalThis.hub2, globalThis.hub3]) try { p?.kill('SIGTERM'); } catch {}
   try { execFileSync('tmux', ['-L', SOCKET, 'kill-server'], { stdio: 'ignore' }); } catch {}
   fs.rmSync(tmp, { recursive: true, force: true });
   process.exit(code);

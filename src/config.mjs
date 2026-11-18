@@ -49,6 +49,9 @@ export const config = {
   allowBypassPermissions: env.HUB_ALLOW_BYPASS === '1',
   orchestratorCwd: path.resolve(expandHome(env.HUB_ORCHESTRATOR_CWD || path.join(ROOT, 'orchestrator'))),
   autostartOrchestrator: env.HUB_AUTOSTART_ORCHESTRATOR !== '0',
+  // After the machine was off or asleep long enough for sessions to die, restart
+  // the workers that were running and tell the lead what happened.
+  resumeOnBoot: env.HUB_RESUME_ON_BOOT !== '0',
   maxWorkers: num(env.HUB_MAX_WORKERS, 6),
   peerRateLimitPerMin: num(env.HUB_PEER_RATE_LIMIT, 20),
   maxMessageChars: num(env.HUB_MAX_MESSAGE_CHARS, 20000),

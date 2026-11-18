@@ -466,11 +466,46 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 // ---------------------------------------------------------------- boot
+/**
+ * Sessions the DB still thinks are running but whose tmux session is gone were
+ * interrupted (reboot, crash, WSL shutdown), as opposed to stopped on purpose.
+ */
+async function findInterrupted() {
+  const live = new Set(await tmux.listSessions());
+  const rows = await db.listSessions();
+  const interrupted = rows.filter((s) => s.status !== 'stopped' && !live.has(s.name));
+  const lastSeen = rows.map((s) => s.last_activity || s.last_seen).filter(Boolean).map((d) => new Date(d).getTime());
+  return { interrupted, lastSeen: lastSeen.length ? new Date(Math.max(...lastSeen)) : null };
+}
+
+async function resumeAfterDowntime({ interrupted, lastSeen }) {
+  const workers = interrupted.filter((s) => s.role === 'worker');
+  const resumed = []; const failed = [];
+  for (const s of workers.slice(0, config.maxWorkers)) {
+    try { await core.restartSession(s.name, 'hub'); resumed.push(s.name); }
+    catch (e) { failed.push(`${s.name} (${e.message})`); log(`resume ${s.name} failed: ${e.message}`); }
+  }
+  for (const s of workers.slice(config.maxWorkers)) failed.push(`${s.name} (over worker limit)`);
+  const mins = lastSeen ? Math.round((Date.now() - lastSeen.getTime()) / 60_000) : null;
+  const note = [
+    `The hub restarted after downtime${mins !== null ? ` (last activity about ${mins} minutes ago)` : ''}; the machine was probably off or asleep. Every session, including you, has a fresh context.`,
+    resumed.length ? `Restarted workers: ${resumed.join(', ')}. Each was told to resume its assigned tasks.` : 'No workers needed restarting.',
+    failed.length ? `Not restarted: ${failed.join('; ')}.` : '',
+    'Rebuild your picture from the board (task_list), the project index notes and latest reports in the vault, and search_history if needed. Then continue: reassign anything stale, start ready tasks, and only message the user if something needs their decision.',
+  ].filter(Boolean).join('\n\n');
+  for (const lead of await core.leadNames()) await core.notify(lead, note);
+  await db.insertMessage({ sender: 'hub', recipient: 'user', kind: 'system',
+    body: `Hub restarted after downtime. Resumed: ${resumed.join(', ') || 'none'}${failed.length ? `. Not resumed: ${failed.join('; ')}` : ''}.` })
+    .then((msg) => core.broadcastUI({ type: 'message', msg }));
+  log(`resume after downtime: resumed ${resumed.length}, failed ${failed.length}`);
+}
+
 async function main() {
   await db.initSchema();
   fs.mkdirSync(config.worktreeDir, { recursive: true });
   vault.initVault(config.vault);
   await git.ensureVaultRepo(config.vault).catch((e) => log(`vault git init failed: ${e.message}`));
+  const downtime = await findInterrupted();
   await core.reconcile();
   setInterval(() => core.reconcile().catch((e) => log('reconcile error', e.message)), 15_000);
   setInterval(() => {
@@ -485,6 +520,9 @@ async function main() {
   if (config.autostartOrchestrator && !(await tmux.hasSession('orchestrator'))) {
     await core.spawnSession({ name: 'orchestrator', role: 'orchestrator', template: 'lead', createdBy: 'hub' })
       .catch((e) => log(`orchestrator autostart failed: ${e.message}`));
+  }
+  if (config.resumeOnBoot && downtime.interrupted.length) {
+    await resumeAfterDowntime(downtime).catch((e) => log(`resume failed: ${e.message}`));
   }
 }
 
