@@ -25,22 +25,49 @@ command -v apt-get >/dev/null || { echo "This script supports Ubuntu/Debian (inc
 
 # ---------------------------------------------------------------- packages
 say "System packages"
+# A third-party apt source with an expired or missing key (often the GitHub CLI
+# repo) makes "apt-get update" fail and silently blocks every install. Refresh
+# the GitHub CLI key if that source exists, and never let one bad source stop us.
+apt_update() {
+  local gh_list
+  gh_list=$(ls /etc/apt/sources.list.d/github-cli*.list /etc/apt/sources.list.d/github-cli*.sources 2>/dev/null | head -1 || true)
+  if [ -n "$gh_list" ]; then
+    local key
+    key=$(grep -ohP 'signed-by=\K[^] ]+|Signed-By:\s*\K\S+' "$gh_list" | head -1 || true)
+    key=${key:-/usr/share/keyrings/githubcli-archive-keyring.gpg}
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee "$key" >/dev/null 2>&1 \
+      && sudo chmod go+r "$key" || true
+  fi
+  if ! sudo apt-get update -qq; then
+    warn "apt-get update reported errors from some sources (see above); continuing with the sources that work."
+  fi
+}
+need_pkg() { ! dpkg -s "$1" >/dev/null 2>&1; }
 pkgs=()
-for p in tmux git curl ca-certificates postgresql openssl; do
-  dpkg -s "$p" >/dev/null 2>&1 || pkgs+=("$p")
-done
+for p in tmux git curl ca-certificates postgresql postgresql-client openssl; do need_pkg "$p" && pkgs+=("$p"); done
 if [ ${#pkgs[@]} -gt 0 ]; then
   echo "   installing: ${pkgs[*]}"
-  sudo apt-get update -qq && sudo apt-get install -y -qq "${pkgs[@]}"
+  apt_update
+  sudo apt-get install -y -qq "${pkgs[@]}"
 fi
+for p in tmux git curl postgresql postgresql-client openssl; do
+  need_pkg "$p" && { echo "   FAILED to install $p. Fix the apt errors above, then run setup again."; exit 1; }
+done
+command -v pg_isready >/dev/null || { echo "   pg_isready missing even though postgresql-client is installed"; exit 1; }
 ok "tmux $(tmux -V | cut -d' ' -f2), git, postgresql"
 
 say "Node.js (20+)"
 node_major() { node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/'; }
 if [ -z "$(node_major)" ] || [ "$(node_major)" -lt 20 ]; then
-  echo "   Node 20+ not found. Installing Node 22 from the NodeSource apt repository."
+  echo "   Node 20+ not found (have: $(node -v 2>/dev/null || echo none)). Installing Node 22 from NodeSource."
   curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh
-  sudo -E bash /tmp/nodesource_setup.sh >/dev/null && sudo apt-get install -y -qq nodejs
+  sudo -E bash /tmp/nodesource_setup.sh >/dev/null 2>&1 || warn "NodeSource setup reported errors; trying the install anyway."
+  sudo apt-get install -y -qq nodejs
+  hash -r
+fi
+if [ -z "$(node_major)" ] || [ "$(node_major)" -lt 20 ]; then
+  echo "   FAILED: still on Node $(node -v 2>/dev/null || echo none). Fix the apt errors above, then run setup again."
+  exit 1
 fi
 ok "node $(node -v)"
 lock_hash=$(sha256sum package-lock.json | cut -c1-16)
@@ -49,7 +76,6 @@ if [ ! -f node_modules/.cchub-lock ] || [ "$(cat node_modules/.cchub-lock)" != "
 fi
 ok "npm dependencies"
 
-# ---------------------------------------------------------------- Claude Code
 say "Claude Code"
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v claude >/dev/null || [[ "$(command -v claude)" == /mnt/* ]]; then
