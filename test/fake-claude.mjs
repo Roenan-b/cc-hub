@@ -21,14 +21,27 @@ const { StdioClientTransport } = await req('@modelcontextprotocol/sdk/dist/esm/c
 
 const args = process.argv.slice(2);
 const flag = (f) => (args.includes(f) ? args[args.indexOf(f) + 1] : null);
-console.log(`ARGV mcp=${!!flag('--mcp-config')} channels=${flag('--dangerously-load-development-channels')} append_prompt=${!!flag('--append-system-prompt')} add_dir=${flag('--add-dir')} settings=${!!flag('--settings')} profile=${(flag('--append-system-prompt') || '').includes('PROFILE-TEST-MARKER')} mode=${flag('--permission-mode') || 'default'}`);
+console.log(
+  `ARGV mcp=${!!flag('--mcp-config')} channels=${flag('--dangerously-load-development-channels')} append_prompt=${!!flag('--append-system-prompt')} add_dir=${flag('--add-dir')} settings=${!!flag('--settings')} profile=${(flag('--append-system-prompt') || '').includes('PROFILE-TEST-MARKER')} mode=${flag('--permission-mode') || 'default'}`,
+);
 console.log('WARNING: Loading development channels\n\n  ❯ 1. I am using this for local development\n    2. Exit');
-await new Promise((r) => { const rl = readline.createInterface({ input: process.stdin }); rl.once('line', () => { rl.close(); r(); }); });
+await new Promise((r) => {
+  const rl = readline.createInterface({ input: process.stdin });
+  rl.once('line', () => {
+    rl.close();
+    r();
+  });
+});
 console.log('accepted');
 
 const cfg = JSON.parse(fs.readFileSync(flag('--mcp-config'), 'utf8')).mcpServers.hub;
 const client = new Client({ name: 'fake-claude', version: '0' }, { capabilities: {} });
-const transport = new StdioClientTransport({ command: cfg.command, args: cfg.args, env: { ...process.env, ...cfg.env }, stderr: 'inherit' });
+const transport = new StdioClientTransport({
+  command: cfg.command,
+  args: cfg.args,
+  env: { ...process.env, ...cfg.env },
+  stderr: 'inherit',
+});
 
 async function call(tool, a) {
   const r = await client.callTool({ name: tool, arguments: a });
@@ -38,18 +51,34 @@ async function call(tool, a) {
 client.fallbackNotificationHandler = async (n) => {
   console.log('NOTIFY', n.method, JSON.stringify(n.params).slice(0, 300));
   if (n.method !== 'notifications/claude/channel') return;
-  const text = n.params.content; const from = n.params.meta?.from;
+  const text = n.params.content;
+  const from = n.params.meta?.from;
   try {
     if (text.startsWith('CALL ')) {
       const { tool, args: a } = JSON.parse(text.slice(5));
       const r = await call(tool, a);
       await call('reply', { text: `RESULT ${tool} ${JSON.stringify(r)}` });
+    } else if (text === 'PERM_BAD') {
+      await client.notification({
+        method: 'notifications/claude/channel/permission_request',
+        params: { request_id: '../../sessions/x', tool_name: 'Bash', description: 'bad id', input_preview: '{}' },
+      });
     } else if (text === 'PERM') {
-      await client.notification({ method: 'notifications/claude/channel/permission_request', params: { request_id: 'abcde', tool_name: 'Bash', description: 'List files', input_preview: '{"command":"ls"}' } });
+      await client.notification({
+        method: 'notifications/claude/channel/permission_request',
+        params: {
+          request_id: 'abcde',
+          tool_name: 'Bash',
+          description: 'List files',
+          input_preview: '{"command":"ls"}',
+        },
+      });
     } else if (from === 'user') {
       await call('reply', { text: `echo: ${text}` });
     }
-  } catch (e) { console.log('ERROR', e.message); }
+  } catch (e) {
+    console.log('ERROR', e.message);
+  }
 };
 await client.connect(transport);
 console.log('TOOLS', (await client.listTools()).tools.map((t) => t.name).join(','));

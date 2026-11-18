@@ -20,12 +20,12 @@ $z = Get-ChildItem "$HOME\Downloads\cc-hub*.zip" | Sort-Object LastWriteTime -De
 
 It asks you for a few things:
 
-| Prompt | What to enter |
-|---|---|
-| Ubuntu sudo password | Your Linux password (for installing packages and Postgres) |
+| Prompt                     | What to enter                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Ubuntu sudo password       | Your Linux password (for installing packages and Postgres)                                             |
 | Folders agents may work in | Press Enter to allow your whole WSL home, or list folders like `/home/you/research:/home/you/capstone` |
-| Claude Code login | Type `/login`, finish in the browser, then `/exit` |
-| Tailscale (optional) | `Y` to set up phone access; sign in when the browser opens |
+| Claude Code login          | Type `/login`, finish in the browser, then `/exit`                                                     |
+| Tailscale (optional)       | `Y` to set up phone access; sign in when the browser opens                                             |
 
 What it does, in order: copies cc-hub to `~/cc-hub` in WSL, installs tmux, git, Postgres, Node 22, and Claude Code (native installer) as needed, enables systemd in WSL (restarting WSL once), creates the database and `.env` with random tokens, creates the vault at `Documents\Vault`, installs the start-at-login launcher, keeps Windows awake while plugged in, installs and opens Obsidian with the vault, optionally sets up Tailscale, puts a **cc-hub** shortcut on your Desktop, copies the admin token to your clipboard, and opens the dashboard.
 
@@ -33,13 +33,13 @@ Re-run the same command any time to update to a newer ZIP. It keeps your `.env`,
 
 ## How it behaves on a laptop
 
-| Situation | What happens |
-|---|---|
-| You log into Windows | A hidden launcher starts WSL, Postgres, and the hub. A background process keeps WSL from shutting down when no terminal is open. |
-| Laptop sleeps | Everything pauses. On wake, the watchdog recognizes the gap, resets its stall timers (so healthy workers aren't restarted), and tells the lead to check the board. |
-| Laptop shuts down or restarts | On next login the hub starts, the lead starts fresh, workers that were running are restarted in their same folders and branches, and the lead gets a briefing to rebuild context from the board, vault, and history. |
-| Hub crashes | It restarts within 5 seconds; agent sessions keep running. |
-| You're away and the laptop is off | Nothing runs, and the phone URL won't load until it's back on. |
+| Situation                         | What happens                                                                                                                                                                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You log into Windows              | A hidden launcher starts WSL, Postgres, and the hub. A background process keeps WSL from shutting down when no terminal is open.                                                                                     |
+| Laptop sleeps                     | Everything pauses. On wake, the watchdog recognizes the gap, resets its stall timers (so healthy workers aren't restarted), and tells the lead to check the board.                                                   |
+| Laptop shuts down or restarts     | On next login the hub starts, the lead starts fresh, workers that were running are restarted in their same folders and branches, and the lead gets a briefing to rebuild context from the board, vault, and history. |
+| Hub crashes                       | It restarts within 5 seconds; agent sessions keep running.                                                                                                                                                           |
+| You're away and the laptop is off | Nothing runs, and the phone URL won't load until it's back on.                                                                                                                                                       |
 
 Claude sessions lose their conversation context on a restart (not on sleep). That's by design: the task board, the vault, and the searchable message history are the team's memory, and the role briefs tell every session to rebuild from them.
 

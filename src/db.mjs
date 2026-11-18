@@ -153,17 +153,30 @@ export async function getTask(id) {
   return rows[0] || null;
 }
 
-const TASK_FIELDS = new Set(['title', 'spec', 'acceptance', 'milestone', 'status', 'priority', 'assignee', 'depends_on', 'result']);
+const TASK_FIELDS = new Set([
+  'title',
+  'spec',
+  'acceptance',
+  'milestone',
+  'status',
+  'priority',
+  'assignee',
+  'depends_on',
+  'result',
+]);
 
 export async function updateTask(id, fields, actor) {
-  const sets = []; const vals = [id];
+  const sets = [];
+  const vals = [id];
   for (const [k, v] of Object.entries(fields)) {
     if (!TASK_FIELDS.has(k)) throw new Error(`invalid task field ${k}`);
-    vals.push(v); sets.push(`${k} = $${vals.length}`);
+    vals.push(v);
+    sets.push(`${k} = $${vals.length}`);
   }
   if (!sets.length) return getTask(id);
   const { rows } = await pool.query(
-    `UPDATE tasks SET ${sets.join(', ')}, updated_at = now() WHERE id = $1 RETURNING *`, vals,
+    `UPDATE tasks SET ${sets.join(', ')}, updated_at = now() WHERE id = $1 RETURNING *`,
+    vals,
   );
   await logTaskEvent(id, actor, fields);
   return rows[0];
@@ -187,7 +200,9 @@ export async function listTasks({ project = null, status = null, assignee = null
 }
 
 export async function taskEvents(taskId) {
-  const { rows } = await pool.query('SELECT ts, actor, change FROM task_events WHERE task_id = $1 ORDER BY id', [taskId]);
+  const { rows } = await pool.query('SELECT ts, actor, change FROM task_events WHERE task_id = $1 ORDER BY id', [
+    taskId,
+  ]);
   return rows;
 }
 
@@ -243,6 +258,13 @@ export async function stats() {
 }
 
 if (process.argv.includes('--init')) {
-  initSchema().then(() => { console.log('schema ready'); return pool.end(); })
-    .catch((e) => { console.error(e.message); process.exit(1); });
+  initSchema()
+    .then(() => {
+      console.log('schema ready');
+      return pool.end();
+    })
+    .catch((e) => {
+      console.error(e.message);
+      process.exit(1);
+    });
 }

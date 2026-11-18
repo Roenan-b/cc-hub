@@ -36,7 +36,10 @@ async function detectWake() {
   await db.pool.query("UPDATE sessions SET last_activity = now() WHERE status <> 'stopped'");
   lastHeartbeat = { at: Date.now(), summary: '' };
   for (const l of await core.leadNames()) {
-    await core.notify(l, `The machine was asleep for about ${mins} minute${mins === 1 ? "" : "s"}. Sessions were paused, not stopped; any step that was mid-request may have failed and been retried. Check the board, peek any worker whose task looks stuck, and carry on. No need to message the user unless something needs their decision.`);
+    await core.notify(
+      l,
+      `The machine was asleep for about ${mins} minute${mins === 1 ? '' : 's'}. Sessions were paused, not stopped; any step that was mid-request may have failed and been retried. Check the board, peek any worker whose task looks stuck, and carry on. No need to message the user unless something needs their decision.`,
+    );
   }
 }
 
@@ -62,10 +65,14 @@ async function scanPanes() {
 
     if (f.usage_limit && Date.now() - (lastLimitNotice.get(s.name) || 0) > 60 * 60_000) {
       lastLimitNotice.set(s.name, Date.now());
-      await db.insertMessage({
-        sender: 'hub', recipient: 'user', kind: 'system',
-        body: `${s.name} appears to have hit a Claude usage limit. Work resumes when the limit resets.`,
-      }).then((msg) => core.broadcastUI({ type: 'message', msg }));
+      await db
+        .insertMessage({
+          sender: 'hub',
+          recipient: 'user',
+          kind: 'system',
+          body: `${s.name} appears to have hit a Claude usage limit. Work resumes when the limit resets.`,
+        })
+        .then((msg) => core.broadcastUI({ type: 'message', msg }));
     }
   }
 }
@@ -80,27 +87,49 @@ async function boardSummary() {
     const open = tasks.filter((t) => !['done', 'cancelled'].includes(t.status));
     if (!open.length) continue;
     const ready = open.filter((t) => t.status === 'todo' && t.deps_done);
-    const counts = Object.entries(p.task_counts || {}).map(([k, v]) => `${k} ${v}`).join(', ');
+    const counts = Object.entries(p.task_counts || {})
+      .map(([k, v]) => `${k} ${v}`)
+      .join(', ');
     lines.push(`Project ${p.slug} (${p.status}): ${counts}`);
     for (const t of open.filter((x) => x.status !== 'todo')) {
       lines.push(`  #${t.id} ${t.status} ${t.assignee || 'unassigned'}: ${t.title}`);
     }
     if (ready.length) {
       actionable = true;
-      lines.push(`  Ready to start: ${ready.slice(0, 8).map((t) => `#${t.id}${t.assignee ? `(${t.assignee})` : ''}`).join(', ')}`);
+      lines.push(
+        `  Ready to start: ${ready
+          .slice(0, 8)
+          .map((t) => `#${t.id}${t.assignee ? `(${t.assignee})` : ''}`)
+          .join(', ')}`,
+      );
     }
     if (open.some((t) => ['review', 'blocked'].includes(t.status))) actionable = true;
   }
-  const problems = sessions.filter((s) => s.role === 'worker' && s.status !== 'stopped' &&
-    (s.flags.stalled || s.flags.usage_limit || s.flags.waiting_dialog || !s.connected));
+  const problems = sessions.filter(
+    (s) =>
+      s.role === 'worker' &&
+      s.status !== 'stopped' &&
+      (s.flags.stalled || s.flags.usage_limit || s.flags.waiting_dialog || !s.connected),
+  );
   for (const s of problems) {
     actionable = true;
-    const why = [s.flags.stalled && `no activity for ${s.flags.idle_min} min`, s.flags.usage_limit && 'usage limit',
-      s.flags.waiting_dialog && 'waiting on a dialog', !s.connected && `channel ${s.status}`].filter(Boolean).join(', ');
+    const why = [
+      s.flags.stalled && `no activity for ${s.flags.idle_min} min`,
+      s.flags.usage_limit && 'usage limit',
+      s.flags.waiting_dialog && 'waiting on a dialog',
+      !s.connected && `channel ${s.status}`,
+    ]
+      .filter(Boolean)
+      .join(', ');
     lines.push(`Session ${s.name}: ${why}`);
   }
-  const idle = sessions.filter((s) => s.role === 'worker' && s.status !== 'stopped' && s.connected && s.flags.stalled === false);
-  if (lines.length) lines.push(`Workers running: ${sessions.filter((s) => s.role === 'worker' && s.status !== 'stopped').length}/${config.maxWorkers}; responsive: ${idle.map((s) => s.name).join(', ') || 'none'}`);
+  const idle = sessions.filter(
+    (s) => s.role === 'worker' && s.status !== 'stopped' && s.connected && s.flags.stalled === false,
+  );
+  if (lines.length)
+    lines.push(
+      `Workers running: ${sessions.filter((s) => s.role === 'worker' && s.status !== 'stopped').length}/${config.maxWorkers}; responsive: ${idle.map((s) => s.name).join(', ') || 'none'}`,
+    );
   return { text: lines.join('\n'), actionable };
 }
 
@@ -113,7 +142,10 @@ async function heartbeat() {
   if (!actionable && text === lastHeartbeat.summary && !stale) return;
   lastHeartbeat = { at: Date.now(), summary: text };
   for (const l of leads) {
-    await core.notify(l, `Watchdog check-in. Act on anything that needs it (start ready tasks, assign reviews, unblock, peek/restart stalled sessions). If nothing needs action, do nothing and do not reply to the user.\n\n${text}`);
+    await core.notify(
+      l,
+      `Watchdog check-in. Act on anything that needs it (start ready tasks, assign reviews, unblock, peek/restart stalled sessions). If nothing needs action, do nothing and do not reply to the user.\n\n${text}`,
+    );
   }
 }
 
@@ -126,7 +158,10 @@ async function digest() {
   const active = (await db.listProjects()).filter((p) => ['planning', 'active'].includes(p.status));
   if (!active.length) return;
   for (const l of await core.leadNames()) {
-    await core.notify(l, `Daily report time (${day}). For each active project (${active.map((p) => p.slug).join(', ')}), write Projects/<slug>/Reports/${day}.md (done, in progress, blocked, decisions, risks, next) and update the project index status. Then reply to the user with a short summary per project and the note paths.`);
+    await core.notify(
+      l,
+      `Daily report time (${day}). For each active project (${active.map((p) => p.slug).join(', ')}), write Projects/<slug>/Reports/${day}.md (done, in progress, blocked, decisions, risks, next) and update the project index status. Then reply to the user with a short summary per project and the note paths.`,
+    );
   }
 }
 
@@ -140,14 +175,25 @@ async function commitVault() {
     }
     const r = await git.syncVault(config.vault, config.vaultRemote);
     if (r.committed) core.log(`vault: committed ${r.committed} changed paths`);
-    if (r.ok) { lastSyncProblem = ''; return; }
+    if (r.ok) {
+      lastSyncProblem = '';
+      return;
+    }
     core.log(`vault sync: ${r.error}`);
-    if (r.error !== lastSyncProblem) { // tell the human once per distinct problem
+    if (r.error !== lastSyncProblem) {
+      // tell the human once per distinct problem
       lastSyncProblem = r.error;
-      const msg = await db.insertMessage({ sender: 'hub', recipient: 'user', kind: 'system', body: `Vault sync problem: ${r.error}` });
+      const msg = await db.insertMessage({
+        sender: 'hub',
+        recipient: 'user',
+        kind: 'system',
+        body: `Vault sync problem: ${r.error}`,
+      });
       core.broadcastUI({ type: 'message', msg });
     }
-  } catch (e) { core.log(`vault commit/sync failed: ${e.message}`); }
+  } catch (e) {
+    core.log(`vault commit/sync failed: ${e.message}`);
+  }
 }
 
 export function start() {

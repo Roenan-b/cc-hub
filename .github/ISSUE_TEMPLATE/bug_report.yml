@@ -1,0 +1,67 @@
+name: Bug report
+description: Something doesn't work the way the docs say it should.
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Remove tokens, secrets, and personal data** from anything you paste.
+        Security issues go to a [private advisory](https://github.com/Roenan-b/cc-hub/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run ...
+        2. Open the dashboard and ...
+        3. See ...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows + WSL2
+        - Ubuntu / Debian
+        - Other Linux
+        - macOS (unsupported)
+        - Windows native (unsupported)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: cc-hub version or commit
+      placeholder: v0.2.0 or the output of `git rev-parse --short HEAD`
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code version
+      placeholder: output of `claude --version`
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: The lines from `hub.log` or the session terminal around the failure.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed tokens, secrets, and personal data from this report.
+          required: true
+        - label: I searched existing issues.
+          required: true

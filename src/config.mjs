@@ -40,7 +40,9 @@ export const config = {
   worktreeDir: path.join(stateDir, 'worktrees'),
   // Sessions may only be started in directories under one of these roots.
   workspaceRoots: (env.HUB_WORKSPACE_ROOTS || '~')
-    .split(':').filter(Boolean).map((p) => path.resolve(expandHome(p))),
+    .split(':')
+    .filter(Boolean)
+    .map((p) => path.resolve(expandHome(p))),
   // Obsidian vault shared by every session (the curated "brain").
   vault: path.resolve(expandHome(env.HUB_VAULT || '~/Vault')),
   vaultAutocommitMin: num(env.HUB_VAULT_AUTOCOMMIT_MIN, 5),

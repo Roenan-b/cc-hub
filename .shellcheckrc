@@ -1,0 +1,2 @@
+# Follow `source` and `.` includes relative to the script.
+external-sources=true
