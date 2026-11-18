@@ -62,7 +62,8 @@ const COMMON_TOOLS = [
   },
   {
     name: 'send_message',
-    description: 'Send a message to another Claude Code session on the hub. It arrives in that session as a channel event.',
+    description:
+      'Send a message to another Claude Code session on the hub. It arrives in that session as a channel event.',
     inputSchema: {
       type: 'object',
       properties: { to: str('Recipient session name (see list_sessions)'), text: str('Message text') },
@@ -76,7 +77,8 @@ const COMMON_TOOLS = [
   },
   {
     name: 'search_history',
-    description: 'Full-text search over every message ever exchanged on the hub (user and sessions). Use when you need context you no longer have.',
+    description:
+      'Full-text search over every message ever exchanged on the hub (user and sessions). Use when you need context you no longer have.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -104,8 +106,16 @@ const num = (description) => ({ type: 'number', description });
 COMMON_TOOLS.push(
   {
     name: 'request_approval',
-    description: 'Ask the human to approve a decision (plan, scope change, risky or irreversible step). Shows Approve / Request changes on their phone; the answer arrives later as a message. Do not proceed with the gated step until approved.',
-    inputSchema: { type: 'object', properties: { title: str('Short title'), body: str('What you want to do and why; phone-readable, include the key trade-offs') }, required: ['title', 'body'] },
+    description:
+      'Ask the human to approve a decision (plan, scope change, risky or irreversible step). Shows Approve / Request changes on their phone; the answer arrives later as a message. Do not proceed with the gated step until approved.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: str('Short title'),
+        body: str('What you want to do and why; phone-readable, include the key trade-offs'),
+      },
+      required: ['title', 'body'],
+    },
   },
   {
     name: 'project_list',
@@ -114,8 +124,12 @@ COMMON_TOOLS.push(
   },
   {
     name: 'task_list',
-    description: 'List tasks on the shared board. Filter by project, status (todo, in_progress, review, blocked, done, cancelled) or assignee.',
-    inputSchema: { type: 'object', properties: { project: str('Project slug'), status: str('Status filter'), assignee: str('Session name filter') } },
+    description:
+      'List tasks on the shared board. Filter by project, status (todo, in_progress, review, blocked, done, cancelled) or assignee.',
+    inputSchema: {
+      type: 'object',
+      properties: { project: str('Project slug'), status: str('Status filter'), assignee: str('Session name filter') },
+    },
   },
   {
     name: 'task_get',
@@ -142,14 +156,21 @@ COMMON_TOOLS.push(
   },
   {
     name: 'task_update',
-    description: 'Update a task. Workers: set your task to in_progress / review / blocked with a result; claim an unassigned ready task by setting assignee to yourself. Reviewers: set done (pass) or in_progress with the author as assignee (changes needed). The lead can change anything.',
+    description:
+      'Update a task. Workers: set your task to in_progress / review / blocked with a result; claim an unassigned ready task by setting assignee to yourself. Reviewers: set done (pass) or in_progress with the author as assignee (changes needed). The lead can change anything.',
     inputSchema: {
       type: 'object',
       properties: {
-        id: num('Task id'), status: str('todo | in_progress | review | blocked | done | cancelled'),
+        id: num('Task id'),
+        status: str('todo | in_progress | review | blocked | done | cancelled'),
         result: str('Outcome, evidence, artifacts (paths, branches, commits), or blocker'),
-        assignee: str('Session name'), title: str('Title'), spec: str('Spec'), acceptance: str('Acceptance criteria'),
-        priority: num('0-3'), depends_on: { type: 'array', items: { type: 'number' } }, milestone: str('Milestone'),
+        assignee: str('Session name'),
+        title: str('Title'),
+        spec: str('Spec'),
+        acceptance: str('Acceptance criteria'),
+        priority: num('0-3'),
+        depends_on: { type: 'array', items: { type: 'number' } },
+        milestone: str('Milestone'),
       },
       required: ['id'],
     },
@@ -159,11 +180,14 @@ COMMON_TOOLS.push(
 const ORCH_TOOLS = [
   {
     name: 'project_create',
-    description: 'Create a project: a task board plus a vault folder Projects/<slug>/ with index, plan, decisions, notes, reports, and sources.',
+    description:
+      'Create a project: a task board plus a vault folder Projects/<slug>/ with index, plan, decisions, notes, reports, and sources.',
     inputSchema: {
       type: 'object',
       properties: {
-        slug: str('lowercase-hyphenated, max 40 chars'), title: str('Human-readable title'), goal: str('Goal / definition of done'),
+        slug: str('lowercase-hyphenated, max 40 chars'),
+        title: str('Human-readable title'),
+        goal: str('Goal / definition of done'),
         repos: { type: 'array', items: { type: 'string' }, description: 'Absolute paths of git repos involved' },
       },
       required: ['slug', 'title'],
@@ -172,46 +196,96 @@ const ORCH_TOOLS = [
   {
     name: 'project_update',
     description: 'Update a project status (planning, active, paused, done), goal, or title.',
-    inputSchema: { type: 'object', properties: { slug: str('Project slug'), status: str('planning | active | paused | done'), goal: str('Goal'), title: str('Title') }, required: ['slug'] },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: str('Project slug'),
+        status: str('planning | active | paused | done'),
+        goal: str('Goal'),
+        title: str('Title'),
+      },
+      required: ['slug'],
+    },
   },
   {
     name: 'spawn_session',
-    description: 'Start a worker Claude Code session. Give it a template (role), a project, and either a cwd or repo+branch (creates an isolated git worktree). The prompt is its first message.',
+    description:
+      'Start a worker Claude Code session. Give it a template (role), a project, and either a cwd or repo+branch (creates an isolated git worktree). The prompt is its first message.',
     inputSchema: {
       type: 'object',
       properties: {
         name: str('Lowercase name, letters/digits/hyphens, max 32 chars, e.g. "mzt-eng-geofence"'),
-        template: { type: 'string', enum: ['researcher', 'engineer', 'reviewer', 'writer', 'general'], description: 'Role brief loaded into its system prompt' },
+        template: {
+          type: 'string',
+          enum: ['researcher', 'engineer', 'reviewer', 'writer', 'general'],
+          description: 'Role brief loaded into its system prompt',
+        },
         project: str(`Project slug${PROJECT ? ` (default ${PROJECT})` : ''}`),
         cwd: str('Working directory (absolute, under an allowed root). Omit when using repo+branch.'),
         repo: str('Git repo to create a worktree from'),
         branch: str('Branch for the worktree (created from HEAD if new)'),
         prompt: str('First message: usually "Your task is #<id>. Start with task_get."'),
-        permission_mode: { type: 'string', enum: ['default', 'acceptEdits', 'plan'], description: 'Claude Code permission mode (default: default)' },
+        permission_mode: {
+          type: 'string',
+          enum: ['default', 'acceptEdits', 'plan'],
+          description: 'Claude Code permission mode (default: default)',
+        },
       },
       required: ['name', 'template', 'prompt'],
     },
   },
-  { name: 'stop_session', description: 'Stop a worker session (kills its tmux session; history, notes, and worktree are kept).', inputSchema: { type: 'object', properties: { name: str('Session name') }, required: ['name'] } },
-  { name: 'restart_session', description: 'Restart a worker with a fresh context in the same directory; it is told to resume its assigned tasks.', inputSchema: { type: 'object', properties: { name: str('Session name') }, required: ['name'] } },
+  {
+    name: 'stop_session',
+    description: 'Stop a worker session (kills its tmux session; history, notes, and worktree are kept).',
+    inputSchema: { type: 'object', properties: { name: str('Session name') }, required: ['name'] },
+  },
+  {
+    name: 'restart_session',
+    description:
+      'Restart a worker with a fresh context in the same directory; it is told to resume its assigned tasks.',
+    inputSchema: { type: 'object', properties: { name: str('Session name') }, required: ['name'] },
+  },
   {
     name: 'peek_session',
-    description: "Read the visible text of a session's terminal (useful when it seems stuck or is waiting on a dialog).",
-    inputSchema: { type: 'object', properties: { name: str('Session name'), lines: num('Scrollback lines (default 80)') }, required: ['name'] },
+    description:
+      "Read the visible text of a session's terminal (useful when it seems stuck or is waiting on a dialog).",
+    inputSchema: {
+      type: 'object',
+      properties: { name: str('Session name'), lines: num('Scrollback lines (default 80)') },
+      required: ['name'],
+    },
   },
   {
     name: 'send_keys',
-    description: 'Press keys in a session terminal. Allowed: Enter, Escape, Up, Down, Left, Right, Tab, BTab, C-c, 1, 2, 3, y, n. Escape interrupts the current turn.',
-    inputSchema: { type: 'object', properties: { name: str('Session name'), keys: { type: 'array', items: { type: 'string' } } }, required: ['name', 'keys'] },
+    description:
+      'Press keys in a session terminal. Allowed: Enter, Escape, Up, Down, Left, Right, Tab, BTab, C-c, 1, 2, 3, y, n. Escape interrupts the current turn.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: str('Session name'), keys: { type: 'array', items: { type: 'string' } } },
+      required: ['name', 'keys'],
+    },
   },
 ];
 
 const TOOL_TO_RPC = {
-  reply: 'reply', send_message: 'send', list_sessions: 'list_sessions', search_history: 'search',
-  read_history: 'history', request_approval: 'request_approval', project_list: 'project_list',
-  task_list: 'task_list', task_get: 'task_get', task_create: 'task_create', task_update: 'task_update',
-  project_create: 'project_create', project_update: 'project_update', spawn_session: 'spawn',
-  stop_session: 'stop', restart_session: 'restart', peek_session: 'peek', send_keys: 'keys',
+  reply: 'reply',
+  send_message: 'send',
+  list_sessions: 'list_sessions',
+  search_history: 'search',
+  read_history: 'history',
+  request_approval: 'request_approval',
+  project_list: 'project_list',
+  task_list: 'task_list',
+  task_get: 'task_get',
+  task_create: 'task_create',
+  task_update: 'task_update',
+  project_create: 'project_create',
+  project_update: 'project_update',
+  spawn_session: 'spawn',
+  stop_session: 'stop',
+  restart_session: 'restart',
+  peek_session: 'peek',
+  send_keys: 'keys',
 };
 
 mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -223,7 +297,10 @@ const LISTED = new Set((ROLE === 'orchestrator' ? [...COMMON_TOOLS, ...ORCH_TOOL
 mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   const method = TOOL_TO_RPC[req.params.name];
   if (!method || !LISTED.has(req.params.name)) {
-    return { isError: true, content: [{ type: 'text', text: `tool not available to this session: ${req.params.name}` }] };
+    return {
+      isError: true,
+      content: [{ type: 'text', text: `tool not available to this session: ${req.params.name}` }],
+    };
   }
   try {
     const result = await rpc(method, req.params.arguments || {});
@@ -239,10 +316,15 @@ mcp.setNotificationHandler(
   z.object({
     method: z.literal('notifications/claude/channel/permission_request'),
     params: z.object({
-      request_id: z.string(), tool_name: z.string(), description: z.string(), input_preview: z.string(),
+      request_id: z.string(),
+      tool_name: z.string(),
+      description: z.string(),
+      input_preview: z.string(),
     }),
   }),
-  async ({ params }) => { sendHub({ type: 'permission_request', ...params }); },
+  async ({ params }) => {
+    sendHub({ type: 'permission_request', ...params });
+  },
 );
 
 // ---------------------------------------------------------------- hub connection
@@ -260,7 +342,10 @@ function rpc(method, params) {
   if (!ws || !ready) return Promise.reject(new Error('not connected to hub (is the hub running?)'));
   const id = ++rpcSeq;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { rpcPending.delete(id); reject(new Error('hub timeout')); }, 60_000);
+    const timer = setTimeout(() => {
+      rpcPending.delete(id);
+      reject(new Error('hub timeout'));
+    }, 60_000);
     rpcPending.set(id, { resolve, reject, timer });
     ws.send(JSON.stringify({ type: 'rpc', id, method, params }));
   });
@@ -271,9 +356,14 @@ function connect() {
   ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', name: NAME, secret: SECRET })));
   ws.on('message', async (raw) => {
     let m;
-    try { m = JSON.parse(raw.toString()); } catch { return; }
+    try {
+      m = JSON.parse(raw.toString());
+    } catch {
+      return;
+    }
     if (m.type === 'welcome') {
-      ready = true; backoff = 500;
+      ready = true;
+      backoff = 500;
       log('connected to hub');
     } else if (m.type === 'deliver') {
       await mcp.notification({
@@ -284,8 +374,10 @@ function connect() {
     } else if (m.type === 'rpc_result') {
       const p = rpcPending.get(m.id);
       if (!p) return;
-      rpcPending.delete(m.id); clearTimeout(p.timer);
-      if (m.error) p.reject(new Error(m.error)); else p.resolve(m.result);
+      rpcPending.delete(m.id);
+      clearTimeout(p.timer);
+      if (m.error) p.reject(new Error(m.error));
+      else p.resolve(m.result);
     } else if (m.type === 'permission_verdict') {
       await mcp.notification({
         method: 'notifications/claude/channel/permission',
@@ -295,9 +387,15 @@ function connect() {
   });
   ws.on('close', (code, reason) => {
     ready = false;
-    for (const [, p] of rpcPending) { clearTimeout(p.timer); p.reject(new Error('hub disconnected')); }
+    for (const [, p] of rpcPending) {
+      clearTimeout(p.timer);
+      p.reject(new Error('hub disconnected'));
+    }
     rpcPending.clear();
-    if (code === 4004) { log('hub rejected credentials; not reconnecting'); return; }
+    if (code === 4004) {
+      log('hub rejected credentials; not reconnecting');
+      return;
+    }
     log(`hub connection closed (${code} ${reason}); retrying in ${backoff}ms`);
     setTimeout(connect, backoff);
     backoff = Math.min(backoff * 2, 15_000);

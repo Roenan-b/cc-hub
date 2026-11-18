@@ -1,635 +1,1630 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#111318">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>cc-hub</title>
-<link rel="icon" href="data:,">
-<style>
-  :root {
-    --bg: #111318; --panel: #181b22; --panel2: #1f232c; --line: #2a2f3a; --text: #e6e8ec; --dim: #8b93a3;
-    --accent: #d97757; --user: #2b4a7a; --peer: #2a3b33; --warn: #b8862d; --bad: #c0504d; --good: #3f9b62; --info: #4a7fc0;
-    --radius: 14px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  button, input, textarea, select { font: inherit; color: inherit; }
-  button { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
-  button:disabled { opacity: .5; cursor: default; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.small { padding: 4px 9px; font-size: 13px; }
-  input, textarea, select { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; width: 100%; }
-  .hidden { display: none !important; }
-  .dim { color: var(--dim); } .mono { font-family: var(--mono); font-size: 12.5px; }
-  #app { display: grid; grid-template-columns: 300px 1fr; height: 100dvh; }
-  aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-  aside header { padding: 14px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--line);
-    padding-top: max(14px, env(safe-area-inset-top)); }
-  aside header h1 { font-size: 17px; margin: 0; flex: 1; }
-  #nav { overflow-y: auto; flex: 1; }
-  .section { padding: 12px 14px 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); display: flex; justify-content: space-between; }
-  .item { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; gap: 10px; align-items: center; }
-  .item.active { background: var(--panel2); }
-  .item .meta { flex: 1; min-width: 0; }
-  .item .name { font-weight: 600; }
-  .item .sub { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--dim); }
-  .dot.online { background: var(--good); } .dot.offline, .dot.starting { background: var(--warn); } .dot.stopped { background: #555; }
-  .dot.alert { background: var(--bad); }
-  .badge { background: var(--accent); color: #fff; border-radius: 9px; font-size: 11px; padding: 1px 7px; }
-  .pill { font-size: 11px; border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; color: var(--dim); white-space: nowrap; }
-  .pill.lead { color: var(--accent); border-color: var(--accent); }
-  .pill.bad { color: var(--bad); border-color: var(--bad); } .pill.warn { color: var(--warn); border-color: var(--warn); }
-  main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-  main > header { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center;
-    padding-top: max(10px, env(safe-area-inset-top)); background: var(--panel); }
-  main > header .title { flex: 1; min-width: 0; }
-  main > header .title b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  main > header .title span { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-  #back { display: none; }
-  .view { flex: 1; overflow-y: auto; padding: 14px; }
-  /* chat */
-  #thread { display: flex; flex-direction: column; gap: 10px; }
-  .msg { max-width: min(760px, 88%); padding: 9px 12px; border-radius: var(--radius); background: var(--panel2); white-space: pre-wrap; word-wrap: break-word; }
-  .msg.from-user { align-self: flex-end; background: var(--user); }
-  .msg.peer { background: var(--peer); }
-  .msg.system { align-self: center; background: none; color: var(--dim); font-size: 12px; padding: 2px; text-align: center; max-width: 95%; }
-  .msg .who { font-size: 11px; color: var(--dim); margin-bottom: 3px; display: flex; gap: 8px; }
-  .msg.from-user .who { color: #b9c8e3; }
-  .msg pre { background: #0b0d11; padding: 8px; border-radius: 8px; overflow-x: auto; font: 12.5px/1.4 var(--mono); white-space: pre; margin: 6px 0; }
-  .msg code { font-family: var(--mono); font-size: 13px; background: #0b0d11; padding: 1px 4px; border-radius: 4px; }
-  .card-warn { border: 1px solid var(--warn); background: #2a2417; }
-  .card-info { border: 1px solid var(--info); background: #17202c; }
-  .preview { font: 12px/1.4 var(--mono); background: #0b0d11; padding: 8px; border-radius: 8px; max-height: 220px; overflow: auto; margin: 6px 0; white-space: pre-wrap; }
-  .actions { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-  .actions .allow { background: var(--good); border-color: var(--good); }
-  .actions .deny { background: var(--bad); border-color: var(--bad); }
-  .pending-tag { font-size: 11px; color: var(--warn); }
-  #composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); background: var(--panel);
-    padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-  #composer textarea { resize: none; max-height: 40vh; min-height: 42px; }
-  .empty { margin: 40px auto; color: var(--dim); text-align: center; }
-  /* dashboard */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 18px; }
-  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-  .tile .n { font-size: 24px; font-weight: 700; } .tile .l { font-size: 12px; color: var(--dim); }
-  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 18px 0 8px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; cursor: pointer; }
-  .box .row1 { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-  .bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin: 8px 0 4px; display: flex; }
-  .bar span { display: block; height: 100%; }
-  .feed .ev { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; display: flex; gap: 8px; }
-  .feed .ev time { color: var(--dim); flex: none; width: 62px; }
-  /* board */
-  .cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; }
-  @media (max-width: 1100px) and (min-width: 761px) { .cols { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
-  .col h4 { margin: 2px 4px 8px; font-size: 13px; display: flex; justify-content: space-between; }
-  .task { background: var(--panel2); border-radius: 10px; padding: 9px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid var(--line); }
-  .task.p0 { border-left-color: var(--bad); } .task.p1 { border-left-color: var(--warn); }
-  .task .t { font-weight: 600; font-size: 14px; } .task .s { font-size: 12px; color: var(--dim); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; }
-  /* dialogs */
-  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 0;
-    width: min(720px, 96vw); max-height: 90dvh; }
-  dialog::backdrop { background: rgba(0,0,0,.6); }
-  dialog .body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-  dialog h2 { margin: 0; font-size: 17px; }
-  dialog label { font-size: 13px; color: var(--dim); display: flex; flex-direction: column; gap: 4px; }
-  dialog .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  #pane { font: 11.5px/1.35 var(--mono); background: #0b0d11; padding: 10px; border-radius: 10px; max-height: 60dvh; overflow: auto; white-space: pre; margin: 0; }
-  #keys { display: flex; flex-wrap: wrap; gap: 6px; }
-  #results .hit { padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
-  #results .hit small { color: var(--dim); }
-  #results b { color: var(--accent); }
-  #login { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: 10; }
-  #login form { width: min(360px, 90vw); display: flex; flex-direction: column; gap: 10px; }
-  .err { color: var(--bad); font-size: 13px; min-height: 1em; }
-  #conn { font-size: 11px; color: var(--dim); } #conn.on { color: var(--good); }
-  body.observer .admin-only { display: none !important; }
-  @media (max-width: 760px) {
-    #app { grid-template-columns: 1fr; }
-    #app.in-main aside { display: none; }
-    #app:not(.in-main) main { display: none; }
-    #back { display: inline-block; }
-    .msg { max-width: 92%; }
-    .cols { grid-template-columns: 1fr; }
-    .two { grid-template-columns: 1fr; }
-  }
-</style>
-</head>
-<body>
-<div id="login" class="hidden">
-  <form id="loginForm">
-    <h2 style="margin:0">cc-hub</h2>
-    <input id="tokenInput" type="password" autocomplete="current-password" placeholder="Admin or observer token" required>
-    <button class="primary" type="submit">Sign in</button>
-    <div class="err" id="loginErr"></div>
-  </form>
-</div>
-
-<div id="app">
-  <aside>
-    <header>
-      <h1>cc-hub</h1>
-      <span id="conn">…</span>
-      <button class="small admin-only" id="searchBtn">Search</button>
-      <button class="small primary admin-only" id="newBtn">+ New</button>
-    </header>
-    <div id="nav"></div>
-  </aside>
-  <main>
-    <header>
-      <button class="small" id="back">‹</button>
-      <div class="title"><b id="curName">Dashboard</b><span id="curInfo"></span></div>
-      <button class="small admin-only hidden" id="termBtn">Terminal</button>
-      <button class="small admin-only hidden" id="moreBtn">⋯</button>
-    </header>
-    <div class="view" id="dashView"></div>
-    <div class="view hidden" id="boardView"></div>
-    <div class="view hidden" id="chatView"><div id="thread"></div></div>
-    <form id="composer" class="hidden admin-only">
-      <textarea id="input" rows="1" placeholder="Message…"></textarea>
-      <button class="primary" id="sendBtn">Send</button>
-    </form>
-  </main>
-</div>
-
-<dialog id="newDlg"><div class="body">
-  <h2>New</h2>
-  <button id="newProjectBtn">Project (task board + vault folder)</button>
-  <button id="newSessionBtn">Session (start a Claude Code worker)</button>
-  <div class="row"><button data-close>Cancel</button></div>
-</div></dialog>
-
-<dialog id="projDlg"><form class="body" id="projForm">
-  <h2>New project</h2>
-  <div class="two">
-    <label>Slug <input name="slug" required pattern="[a-z0-9][a-z0-9\-]{0,39}" placeholder="cfg-research" autocapitalize="off" autocorrect="off"></label>
-    <label>Title <input name="title" required placeholder="CFG + DDG reverse engineering"></label>
-  </div>
-  <label>Goal / definition of done <textarea name="goal" rows="3"></textarea></label>
-  <label>Repositories (one absolute path per line, optional) <textarea name="repos" rows="2" autocapitalize="off"></textarea></label>
-  <div class="err" id="projErr"></div>
-  <div class="row"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Create</button></div>
-</form></dialog>
-
-<dialog id="sessDlg"><form class="body" id="sessForm">
-  <h2>New session</h2>
-  <div class="two">
-    <label>Name <input name="name" required pattern="[a-z0-9][a-z0-9\-]{0,31}" placeholder="cfg-research-1" autocapitalize="off" autocorrect="off"></label>
-    <label>Role template <select name="template"></select></label>
-    <label>Project <select name="project"></select></label>
-    <label>Permission mode <select name="permission_mode"></select></label>
-  </div>
-  <label>Working directory (or use repo + branch for an isolated worktree) <input name="cwd" placeholder="/home/you/projects/repo" autocapitalize="off" autocorrect="off"></label>
-  <div class="two">
-    <label>Repo <input name="repo" placeholder="/home/you/projects/repo" autocapitalize="off" autocorrect="off"></label>
-    <label>Branch <input name="branch" placeholder="feature/x" autocapitalize="off" autocorrect="off"></label>
-  </div>
-  <label>First message <textarea name="prompt" rows="4" placeholder="What should this session work on?"></textarea></label>
-  <div class="err" id="sessErr"></div>
-  <div class="row"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Start</button></div>
-</form></dialog>
-
-<dialog id="taskDlg"><div class="body">
-  <div class="row" style="justify-content:space-between;align-items:center"><h2 id="taskTitle">Task</h2><button class="small" data-close>Close</button></div>
-  <div id="taskBody"></div>
-  <div class="two admin-only">
-    <label>Status <select id="taskStatus"><option>todo</option><option>in_progress</option><option>review</option><option>blocked</option><option>done</option><option>cancelled</option></select></label>
-    <label>Assignee <select id="taskAssignee"></select></label>
-  </div>
-  <div class="row admin-only"><button class="primary" id="taskSave">Save</button></div>
-</div></dialog>
-
-<dialog id="termDlg"><div class="body">
-  <div class="row" style="justify-content:space-between;align-items:center">
-    <h2 id="termTitle">Terminal</h2>
-    <div><button class="small" id="termRefresh">Refresh</button> <button class="small" data-close>Close</button></div>
-  </div>
-  <pre id="pane"></pre>
-  <div id="keys"></div>
-</div></dialog>
-
-<dialog id="moreDlg"><div class="body">
-  <h2 id="moreTitle">Session</h2>
-  <button id="restartBtn">Restart (fresh context)</button>
-  <button id="stopBtn">Stop (keep history)</button>
-  <button id="forgetBtn" style="color:var(--bad)">Stop and remove from list</button>
-  <button data-close>Close</button>
-</div></dialog>
-
-<dialog id="searchDlg"><div class="body">
-  <div class="row" style="justify-content:space-between;align-items:center"><h2>Search history</h2><button class="small" data-close>Close</button></div>
-  <form id="searchForm" style="display:flex;gap:8px"><input id="q" placeholder='e.g. "zero trust" geofence' autocapitalize="off"><button class="primary">Go</button></form>
-  <div id="results"></div>
-</div></dialog>
-
-<script>
-'use strict';
-const $ = (s) => document.querySelector(s);
-const el = (tag, props = {}, ...kids) => {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (k === 'class') e.className = v; else if (k.startsWith('on')) e[k] = v; else if (k === 'dataset') Object.assign(e.dataset, v); else e.setAttribute(k, v);
-  }
-  for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) e.append(k instanceof Node ? k : String(k));
-  return e;
-};
-const state = {
-  me: null, view: 'dash', current: null, project: null, sessions: [], projects: [], tasks: [],
-  messages: new Map(), unread: new Map(), perms: new Map(), dash: null,
-};
-const isAdmin = () => state.me?.level === 'admin';
-
-async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    ...opts, credentials: 'same-origin',
-    headers: { ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  if (res.status === 401 && path !== '/api/login') { showLogin(); throw new Error('login required'); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
-}
-function showLogin() { $('#login').classList.remove('hidden'); $('#tokenInput').focus(); }
-$('#loginForm').onsubmit = async (e) => {
-  e.preventDefault(); $('#loginErr').textContent = '';
-  try { await api('/api/login', { method: 'POST', body: { token: $('#tokenInput').value } }); $('#login').classList.add('hidden'); boot(); }
-  catch (err) { $('#loginErr').textContent = err.message; }
-};
-
-// ---------- helpers
-function renderRich(target, text) {
-  text.split(/```[\w-]*\n?/).forEach((part, i) => {
-    if (i % 2 === 1) { target.append(el('pre', {}, part.replace(/\n$/, ''))); return; }
-    part.split(/(`[^`\n]+`)/).forEach((seg) => {
-      if (seg.length > 2 && seg.startsWith('`') && seg.endsWith('`')) target.append(el('code', {}, seg.slice(1, -1)));
-      else if (seg) target.append(seg);
-    });
-  });
-}
-const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-const ago = (ts) => {
-  if (!ts) return 'never';
-  const m = Math.round((Date.now() - new Date(ts)) / 60000);
-  return m < 1 ? 'now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
-};
-const sessFlags = (s) => {
-  const out = [];
-  if (s.flags?.usage_limit) out.push(el('span', { class: 'pill bad' }, 'usage limit'));
-  if (s.flags?.waiting_dialog) out.push(el('span', { class: 'pill warn' }, 'waiting on dialog'));
-  if (s.flags?.stalled && s.status !== 'stopped') out.push(el('span', { class: 'pill warn' }, `idle ${s.flags.idle_min}m`));
-  return out;
-};
-const dotClass = (s) => (s.flags?.usage_limit || (s.flags?.stalled && s.status !== 'stopped') ? 'alert' : s.connected ? 'online' : s.status);
-
-// ---------- navigation
-function show(view) {
-  state.view = view;
-  $('#dashView').classList.toggle('hidden', view !== 'dash');
-  $('#boardView').classList.toggle('hidden', view !== 'board');
-  $('#chatView').classList.toggle('hidden', view !== 'chat');
-  $('#composer').classList.toggle('hidden', view !== 'chat' || !isAdmin());
-  $('#termBtn').classList.toggle('hidden', view !== 'chat');
-  $('#moreBtn').classList.toggle('hidden', view !== 'chat');
-  $('#app').classList.add('in-main');
-  renderNav();
-}
-$('#back').onclick = () => { $('#app').classList.remove('in-main'); };
-
-function renderNav() {
-  const nav = $('#nav'); nav.textContent = '';
-  nav.append(el('div', { class: 'item' + (state.view === 'dash' ? ' active' : ''), onclick: openDash },
-    el('div', { class: 'meta' }, el('div', { class: 'name' }, 'Dashboard'), el('div', { class: 'sub' }, 'Everything at a glance'))));
-  nav.append(el('div', { class: 'section' }, el('span', {}, 'Projects')));
-  if (!state.projects.length) nav.append(el('div', { class: 'item dim' }, 'No projects yet'));
-  for (const p of state.projects) {
-    const c = p.task_counts || {}; const total = Object.values(c).reduce((a, b) => a + b, 0);
-    nav.append(el('div', { class: 'item' + (state.view === 'board' && state.project === p.slug ? ' active' : ''), onclick: () => openBoard(p.slug) },
-      el('div', { class: 'meta' }, el('div', { class: 'name' }, p.title), el('div', { class: 'sub' }, `${p.status} · ${c.done || 0}/${total} done`))));
-  }
-  nav.append(el('div', { class: 'section' }, el('span', {}, 'Sessions')));
-  for (const s of state.sessions) {
-    const n = state.unread.get(s.name) || 0;
-    nav.append(el('div', { class: 'item' + (state.view === 'chat' && state.current === s.name ? ' active' : ''), onclick: () => openSession(s.name) },
-      el('span', { class: 'dot ' + dotClass(s) }),
-      el('div', { class: 'meta' },
-        el('div', { class: 'name' }, s.name, ' ', el('span', { class: 'pill' + (s.role === 'orchestrator' ? ' lead' : '') }, s.template)),
-        el('div', { class: 'sub' }, `${s.connected ? 'online' : s.status}${s.project ? ' · ' + s.project : ''} · ${ago(s.last_activity)}`)),
-      n ? el('span', { class: 'badge' }, n) : null));
-  }
-  const cur = state.sessions.find((s) => s.name === state.current);
-  if (state.view === 'chat' && cur) {
-    $('#curInfo').textContent = `${cur.template} · ${cur.connected ? 'online' : cur.status} · ${cur.worktree?.branch ? 'branch ' + cur.worktree.branch + ' · ' : ''}${cur.cwd}`;
-  }
-}
-
-// ---------- dashboard
-async function openDash() {
-  state.view = 'dash'; $('#curName').textContent = 'Dashboard'; $('#curInfo').textContent = state.me.level === 'observer' ? 'read-only' : '';
-  show('dash');
-  state.dash = await api('/api/dashboard');
-  renderDash();
-}
-function renderDash() {
-  const d = state.dash; if (!d) return;
-  const v = $('#dashView'); v.textContent = '';
-  const st = d.stats;
-  v.append(el('div', { class: 'tiles' },
-    [['in progress', st.tasks_in_progress], ['blocked', st.tasks_blocked], ['done (24h)', st.tasks_done_24h],
-     ['approvals', st.approvals_pending], ['messages (24h)', st.messages_24h],
-     ['workers', `${d.sessions.filter((s) => s.role === 'worker' && s.status !== 'stopped').length}/${state.me.max_workers}`]]
-      .map(([l, n]) => el('div', { class: 'tile' }, el('div', { class: 'n' }, n), el('div', { class: 'l' }, l)))));
-
-  if (d.approvals.length) {
-    v.append(el('h3', {}, 'Waiting on you'));
-    for (const a of d.approvals) v.append(approvalCard({ sender: a.session, ts: a.created_at, body: `${a.title}\n\n${a.body}`, meta: { approval_id: a.id, title: a.title, status: a.status } }));
-  }
-
-  v.append(el('h3', {}, 'Projects'));
-  const pg = el('div', { class: 'grid' });
-  if (!d.projects.length) pg.append(el('div', { class: 'dim' }, isAdmin() ? 'No projects yet. Tell the lead about a problem, or use + New.' : 'No projects yet.'));
-  for (const p of d.projects) {
-    const c = p.task_counts || {}; const total = Object.values(c).reduce((a, b) => a + b, 0) || 1;
-    const seg = (k, color) => el('span', { style: `width:${((c[k] || 0) / total) * 100}%;background:${color}` });
-    pg.append(el('div', { class: 'box', onclick: () => openBoard(p.slug) },
-      el('div', { class: 'row1' }, el('b', {}, p.title), el('span', { class: 'pill' }, p.status)),
-      el('div', { class: 'bar' }, seg('done', 'var(--good)'), seg('review', 'var(--info)'), seg('in_progress', 'var(--accent)'), seg('blocked', 'var(--bad)')),
-      el('div', { class: 'dim', style: 'font-size:12px' }, ['done', 'review', 'in_progress', 'blocked', 'todo'].filter((k) => c[k]).map((k) => `${c[k]} ${k.replace('_', ' ')}`).join(' · ') || 'no tasks yet')));
-  }
-  v.append(pg);
-
-  v.append(el('h3', {}, 'Sessions'));
-  const sg = el('div', { class: 'grid' });
-  for (const s of d.sessions.filter((x) => x.status !== 'stopped')) {
-    sg.append(el('div', { class: 'box', onclick: () => openSession(s.name) },
-      el('div', { class: 'row1' }, el('span', {}, el('span', { class: 'dot ' + dotClass(s), style: 'display:inline-block;margin-right:6px' }), el('b', {}, s.name)),
-        el('span', { class: 'pill' + (s.role === 'orchestrator' ? ' lead' : '') }, s.template)),
-      el('div', { class: 'dim', style: 'font-size:12px;margin-top:4px' }, `${s.project || 'no project'} · active ${ago(s.last_activity)}`),
-      el('div', { class: 'actions' }, sessFlags(s))));
-  }
-  if (!sg.childElementCount) sg.append(el('div', { class: 'dim' }, 'No running sessions.'));
-  v.append(sg);
-
-  v.append(el('h3', {}, 'Activity'));
-  const feed = el('div', { class: 'feed' });
-  for (const a of d.activity) {
-    const text = a.type === 'task'
-      ? `${a.who} · #${a.task_id} ${a.text} · ${Object.entries(a.detail).filter(([k]) => ['status', 'assignee', 'created'].includes(k)).map(([k, val]) => (k === 'created' ? 'created' : `${k} → ${val}`)).join(', ') || 'updated'}`
-      : `${a.who} → ${a.detail.recipient}${a.detail.kind !== 'chat' ? ` (${a.detail.kind.replace('_', ' ')})` : ''}: ${a.text}`;
-    feed.append(el('div', { class: 'ev' }, el('time', {}, fmtTime(a.ts)), el('span', {}, text)));
-  }
-  v.append(feed);
-}
-
-// ---------- board
-async function openBoard(slug) {
-  state.project = slug; const p = state.projects.find((x) => x.slug === slug);
-  $('#curName').textContent = p ? p.title : slug; $('#curInfo').textContent = p ? `${p.status} · ${p.goal || ''}` : '';
-  show('board');
-  state.tasks = await api(`/api/projects/${slug}/tasks`);
-  renderBoard();
-}
-function renderBoard() {
-  const v = $('#boardView'); v.textContent = '';
-  const cols = [['todo', 'To do'], ['in_progress', 'In progress'], ['review', 'Review'], ['blocked', 'Blocked'], ['done', 'Done']];
-  const wrap = el('div', { class: 'cols' });
-  for (const [key, label] of cols) {
-    const ts = state.tasks.filter((t) => t.status === key);
-    const col = el('div', { class: 'col' }, el('h4', {}, el('span', {}, label), el('span', { class: 'dim' }, ts.length)));
-    for (const t of ts) {
-      col.append(el('div', { class: `task p${t.priority}`, onclick: () => openTask(t.id) },
-        el('div', { class: 't' }, `#${t.id} ${t.title}`),
-        el('div', { class: 's' }, el('span', {}, t.assignee || 'unassigned'), t.milestone ? el('span', { class: 'pill' }, t.milestone) : null,
-          t.status === 'todo' && !t.deps_done ? el('span', { class: 'pill warn' }, `waits on ${t.depends_on.map((d) => '#' + d).join(' ')}`) : null)));
-    }
-    wrap.append(col);
-  }
-  v.append(wrap);
-  if (!state.tasks.length) v.append(el('div', { class: 'empty' }, 'No tasks yet. The lead creates them after you approve the plan.'));
-}
-async function openTask(id) {
-  const t = await api(`/api/tasks/${id}`);
-  $('#taskTitle').textContent = `#${t.id} ${t.title}`;
-  const b = $('#taskBody'); b.textContent = '';
-  const block = (label, text) => text ? [el('h3', {}, label), el('div', { class: 'preview' }, text)] : [];
-  b.append(el('div', { class: 'dim' }, `${t.status} · P${t.priority} · ${t.assignee || 'unassigned'}${t.milestone ? ' · ' + t.milestone : ''}${t.depends_on.length ? ' · depends on ' + t.depends_on.map((d) => '#' + d).join(', ') : ''}`),
-    ...block('Spec', t.spec), ...block('Acceptance', t.acceptance), ...block('Result', t.result),
-    el('h3', {}, 'History'),
-    el('div', { class: 'feed' }, t.history.map((h) => el('div', { class: 'ev' }, el('time', {}, fmtTime(h.ts)), el('span', {}, `${h.actor}: ${JSON.stringify(h.change)}`)))));
-  $('#taskStatus').value = t.status;
-  const sel = $('#taskAssignee'); sel.textContent = '';
-  sel.append(el('option', { value: '' }, 'unassigned'), ...state.sessions.map((s) => el('option', { value: s.name }, s.name)));
-  sel.value = t.assignee || '';
-  $('#taskSave').onclick = async () => {
-    const body = { status: $('#taskStatus').value };
-    if (sel.value && sel.value !== t.assignee) body.assignee = sel.value;
-    try { await api(`/api/tasks/${t.id}`, { method: 'PATCH', body }); $('#taskDlg').close(); }
-    catch (e) { alert(e.message); }
-  };
-  $('#taskDlg').showModal();
-}
-
-// ---------- chat
-function msgEl(m) {
-  if (m.kind === 'system' || m.kind === 'permission_verdict' || m.kind === 'approval_response') {
-    return el('div', { class: 'msg system' }, `${m.sender === 'hub' ? '' : m.sender + ': '}${m.body.split('\n')[0].slice(0, 300)} · ${fmtTime(m.ts)}`);
-  }
-  if (m.kind === 'permission_request') return permEl(m);
-  if (m.kind === 'approval_request') return approvalCard(m);
-  const fromUser = m.sender === 'user';
-  const peer = m.sender !== 'user' && m.recipient !== 'user';
-  const who = el('div', { class: 'who' }, el('span', {}, fromUser ? 'you' : peer ? `${m.sender} → ${m.recipient}` : m.sender), el('span', {}, fmtTime(m.ts)));
-  if (fromUser && !m.delivered_at && m.recipient !== 'user') who.append(el('span', { class: 'pending-tag', dataset: { pendingFor: m.id } }, 'queued'));
-  const body = el('div'); renderRich(body, m.body);
-  return el('div', { class: 'msg' + (fromUser ? ' from-user' : '') + (peer ? ' peer' : '') }, who, body);
-}
-function permEl(m) {
-  const meta = m.meta || {};
-  const live = state.perms.get(`${m.sender}:${meta.request_id}`);
-  const actions = el('div', { class: 'actions' });
-  if (live && live.status === 'pending' && isAdmin()) {
-    for (const [label, behavior] of [['Allow', 'allow'], ['Deny', 'deny']]) {
-      actions.append(el('button', { class: behavior, onclick: async (e) => {
-        actions.querySelectorAll('button').forEach((x) => (x.disabled = true));
-        try { await api(`/api/permissions/${m.sender}/${meta.request_id}`, { method: 'POST', body: { behavior } }); live.status = behavior; actions.textContent = behavior === 'allow' ? 'Allowed' : 'Denied'; }
-        catch (err) { actions.textContent = err.message; }
-      } }, label));
-    }
-  } else actions.append(el('span', { class: 'pending-tag' }, 'answered or expired'));
-  return el('div', { class: 'msg card-warn' },
-    el('div', { class: 'who' }, `${m.sender} wants to use ${meta.tool_name || 'a tool'} · ${fmtTime(m.ts)}`),
-    el('div', {}, meta.description || ''), el('div', { class: 'preview' }, meta.input_preview || ''), actions);
-}
-function approvalCard(m) {
-  const meta = m.meta || {};
-  const actions = el('div', { class: 'actions' });
-  const pending = state.dash?.approvals?.some((a) => a.id === meta.approval_id) ?? meta.status === 'pending';
-  if (pending && isAdmin()) {
-    const note = el('textarea', { rows: 2, placeholder: 'Changes or notes (required for Request changes)' });
-    const decide = async (decision) => {
-      actions.querySelectorAll('button').forEach((x) => (x.disabled = true));
-      try { await api(`/api/approvals/${meta.approval_id}`, { method: 'POST', body: { decision, response: note.value } }); actions.textContent = decision === 'approved' ? 'Approved' : 'Changes requested'; }
-      catch (err) { actions.querySelectorAll('button').forEach((x) => (x.disabled = false)); alert(err.message); }
-    };
-    actions.append(note, el('button', { class: 'allow', onclick: () => decide('approved') }, 'Approve'),
-      el('button', { onclick: () => decide('changes_requested') }, 'Request changes'));
-  } else actions.append(el('span', { class: 'pending-tag' }, 'decided'));
-  const body = el('div'); renderRich(body, m.body);
-  return el('div', { class: 'msg card-info' }, el('div', { class: 'who' }, `${m.sender} asks for approval · ${fmtTime(m.ts)}`), body, actions);
-}
-function renderThread() {
-  const t = $('#thread'); t.textContent = '';
-  const msgs = state.messages.get(state.current) || [];
-  if (!msgs.length) t.append(el('div', { class: 'empty' }, 'No messages yet.'));
-  for (const m of msgs) t.append(msgEl(m));
-  $('#chatView').scrollTop = $('#chatView').scrollHeight;
-}
-async function openSession(name) {
-  state.current = name; state.unread.delete(name);
-  $('#curName').textContent = name;
-  show('chat');
-  if (!state.dash) state.dash = await api('/api/dashboard').catch(() => null);
-  state.messages.set(name, await api(`/api/sessions/${name}/messages`));
-  renderThread();
-}
-$('#composer').onsubmit = async (e) => {
-  e.preventDefault();
-  const text = $('#input').value.trim();
-  if (!text || !state.current) return;
-  $('#sendBtn').disabled = true;
-  try { await api(`/api/sessions/${state.current}/messages`, { method: 'POST', body: { text } }); $('#input').value = ''; autosize(); }
-  catch (err) { alert(err.message); }
-  finally { $('#sendBtn').disabled = false; }
-};
-const autosize = () => { const i = $('#input'); i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight, innerHeight * 0.4) + 'px'; };
-$('#input').addEventListener('input', autosize);
-$('#input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && matchMedia('(pointer: fine)').matches) { e.preventDefault(); $('#composer').requestSubmit(); }
-});
-
-// ---------- dialogs
-document.querySelectorAll('[data-close]').forEach((b) => (b.onclick = (e) => { e.preventDefault(); b.closest('dialog').close(); }));
-$('#newBtn').onclick = () => $('#newDlg').showModal();
-$('#newProjectBtn').onclick = () => { $('#newDlg').close(); $('#projErr').textContent = ''; $('#projDlg').showModal(); };
-$('#projForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const f = Object.fromEntries(new FormData(e.target));
-  f.repos = f.repos.split('\n').map((s) => s.trim()).filter(Boolean);
-  try { const p = await api('/api/projects', { method: 'POST', body: f }); $('#projDlg').close(); e.target.reset(); await refreshProjects(); openBoard(p.slug); }
-  catch (err) { $('#projErr').textContent = err.message; }
-};
-$('#newSessionBtn').onclick = () => {
-  $('#newDlg').close();
-  const f = $('#sessForm');
-  const fill = (sel, items, first) => { sel.textContent = ''; if (first) sel.append(el('option', { value: '' }, first)); for (const [v, l] of items) sel.append(el('option', { value: v }, l)); };
-  fill(f.template, state.me.templates.filter((t) => t !== 'lead').map((t) => [t, t]));
-  f.template.value = 'general';
-  fill(f.project, state.projects.map((p) => [p.slug, p.title]), 'no project');
-  if (state.view === 'board') f.project.value = state.project;
-  fill(f.permission_mode, state.me.permission_modes.map((m) => [m, m]));
-  f.cwd.placeholder = (state.me.roots[0] || '/home/you') + '/project';
-  $('#sessErr').textContent = ''; $('#sessDlg').showModal();
-};
-$('#sessForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const f = Object.fromEntries([...new FormData(e.target)].filter(([, v]) => v !== ''));
-  try { const s = await api('/api/sessions', { method: 'POST', body: f }); $('#sessDlg').close(); e.target.reset(); openSession(s.name); }
-  catch (err) { $('#sessErr').textContent = err.message; }
-};
-async function refreshPane() {
-  const { pane } = await api(`/api/sessions/${state.current}/pane`);
-  $('#pane').textContent = pane || '(empty or not running)'; $('#pane').scrollTop = $('#pane').scrollHeight;
-}
-$('#termBtn').onclick = async () => {
-  $('#termTitle').textContent = `Terminal: ${state.current}`;
-  const k = $('#keys'); k.textContent = '';
-  for (const key of state.me.keys) {
-    k.append(el('button', { class: 'small', onclick: async () => { await api(`/api/sessions/${state.current}/keys`, { method: 'POST', body: { keys: [key] } }).catch((e) => alert(e.message)); setTimeout(refreshPane, 400); } }, key));
-  }
-  $('#termDlg').showModal(); refreshPane().catch((e) => ($('#pane').textContent = e.message));
-};
-$('#termRefresh').onclick = () => refreshPane();
-$('#moreBtn').onclick = () => { $('#moreTitle').textContent = state.current; $('#moreDlg').showModal(); };
-$('#restartBtn').onclick = async () => { if (confirm(`Restart ${state.current}? Its context is cleared; history stays searchable.`)) { await api(`/api/sessions/${state.current}/restart`, { method: 'POST', body: {} }).catch((e) => alert(e.message)); $('#moreDlg').close(); } };
-$('#stopBtn').onclick = async () => { if (confirm(`Stop ${state.current}?`)) { await api(`/api/sessions/${state.current}`, { method: 'DELETE' }).catch((e) => alert(e.message)); $('#moreDlg').close(); } };
-$('#forgetBtn').onclick = async () => { if (confirm(`Stop and remove ${state.current}? Messages stay in the database.`)) { await api(`/api/sessions/${state.current}?forget=1`, { method: 'DELETE' }).catch((e) => alert(e.message)); $('#moreDlg').close(); openDash(); } };
-$('#searchBtn').onclick = () => { $('#searchDlg').showModal(); $('#q').focus(); };
-$('#searchForm').onsubmit = async (e) => {
-  e.preventDefault();
-  const hits = await api('/api/search?q=' + encodeURIComponent($('#q').value));
-  const box = $('#results'); box.textContent = hits.length ? '' : 'No results.';
-  for (const h of hits) {
-    const p = el('div');
-    (h.snippet || h.body).split(/(<b>.*?<\/b>)/).forEach((seg) => p.append(seg.startsWith('<b>') ? el('b', {}, seg.slice(3, -4)) : seg));
-    const target = ['user', 'hub'].includes(h.sender) ? h.recipient : h.sender;
-    box.append(el('div', { class: 'hit', onclick: () => { $('#searchDlg').close(); if (state.sessions.some((s) => s.name === target)) openSession(target); } },
-      el('small', {}, `${h.sender} → ${h.recipient} · ${new Date(h.ts).toLocaleString()}`), p));
-  }
-};
-
-// ---------- realtime
-let dashTimer = null;
-const refreshDashSoon = () => { clearTimeout(dashTimer); dashTimer = setTimeout(async () => { if (state.view === 'dash') { state.dash = await api('/api/dashboard'); renderDash(); } }, 400); };
-async function refreshProjects() { state.projects = await api('/api/projects'); renderNav(); }
-
-function connectWS() {
-  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/ui');
-  ws.onopen = () => { $('#conn').textContent = '● live'; $('#conn').className = 'on'; };
-  ws.onclose = () => { $('#conn').textContent = '○ reconnecting'; $('#conn').className = ''; setTimeout(connectWS, 2000); };
-  ws.onmessage = async (ev) => {
-    const e = JSON.parse(ev.data);
-    if (e.type === 'sessions') { state.sessions = e.sessions; renderNav(); refreshDashSoon(); }
-    else if (e.type === 'permissions') { for (const p of e.pending) state.perms.set(`${p.session}:${p.request_id}`, p); }
-    else if (e.type === 'delivered') { document.querySelectorAll(`[data-pending-for="${e.id}"]`).forEach((x) => x.remove()); }
-    else if (e.type === 'projects') { await refreshProjects(); refreshDashSoon(); }
-    else if (e.type === 'approvals') { state.dash = await api('/api/dashboard'); if (state.view === 'dash') renderDash(); }
-    else if (e.type === 'task') {
-      refreshProjects(); refreshDashSoon();
-      if (state.view === 'board' && e.task.project === state.project) {
-        state.tasks = await api(`/api/projects/${state.project}/tasks`); renderBoard();
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#111318" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>cc-hub</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --bg: #111318;
+        --panel: #181b22;
+        --panel2: #1f232c;
+        --line: #2a2f3a;
+        --text: #e6e8ec;
+        --dim: #8b93a3;
+        --accent: #d97757;
+        --user: #2b4a7a;
+        --peer: #2a3b33;
+        --warn: #b8862d;
+        --bad: #c0504d;
+        --good: #3f9b62;
+        --info: #4a7fc0;
+        --radius: 14px;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
-    } else if (e.type === 'message') {
-      const m = e.msg;
-      if (m.kind === 'permission_request') { state.perms.set(`${m.sender}:${m.meta.request_id}`, { ...m.meta }); notify(`${m.sender} needs approval`, `${m.meta.tool_name}: ${m.meta.description}`); }
-      else if (m.kind === 'approval_request') { state.dash = await api('/api/dashboard'); notify(`${m.sender} asks for approval`, m.meta.title || ''); }
-      else if (m.recipient === 'user' && m.kind === 'chat') notify(m.sender, m.body);
-      for (const name of new Set([m.sender, m.recipient])) {
-        if (name === 'user' || name === 'hub') continue;
-        if (state.messages.has(name)) state.messages.get(name).push(m);
-        if (state.view === 'chat' && name === state.current) {
-          const v = $('#chatView'); const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 80;
-          $('#thread .empty')?.remove(); $('#thread').append(msgEl(m));
-          if (atBottom || m.sender === 'user') v.scrollTop = v.scrollHeight;
-        } else if (m.recipient === 'user' && m.kind !== 'system') {
-          state.unread.set(name, (state.unread.get(name) || 0) + 1);
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.45 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        background: var(--panel2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.small {
+        padding: 4px 9px;
+        font-size: 13px;
+      }
+      input,
+      textarea,
+      select {
+        background: var(--panel2);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px 11px;
+        width: 100%;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .dim {
+        color: var(--dim);
+      }
+      .mono {
+        font-family: var(--mono);
+        font-size: 12.5px;
+      }
+      #app {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        height: 100dvh;
+      }
+      aside {
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      aside header {
+        padding: 14px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding-top: max(14px, env(safe-area-inset-top));
+      }
+      aside header h1 {
+        font-size: 17px;
+        margin: 0;
+        flex: 1;
+      }
+      #nav {
+        overflow-y: auto;
+        flex: 1;
+      }
+      .section {
+        padding: 12px 14px 4px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--dim);
+        display: flex;
+        justify-content: space-between;
+      }
+      .item {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .item.active {
+        background: var(--panel2);
+      }
+      .item .meta {
+        flex: 1;
+        min-width: 0;
+      }
+      .item .name {
+        font-weight: 600;
+      }
+      .item .sub {
+        color: var(--dim);
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+        background: var(--dim);
+      }
+      .dot.online {
+        background: var(--good);
+      }
+      .dot.offline,
+      .dot.starting {
+        background: var(--warn);
+      }
+      .dot.stopped {
+        background: #555;
+      }
+      .dot.alert {
+        background: var(--bad);
+      }
+      .badge {
+        background: var(--accent);
+        color: #fff;
+        border-radius: 9px;
+        font-size: 11px;
+        padding: 1px 7px;
+      }
+      .pill {
+        font-size: 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 6px;
+        color: var(--dim);
+        white-space: nowrap;
+      }
+      .pill.lead {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .pill.bad {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      .pill.warn {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        min-width: 0;
+      }
+      main > header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding-top: max(10px, env(safe-area-inset-top));
+        background: var(--panel);
+      }
+      main > header .title {
+        flex: 1;
+        min-width: 0;
+      }
+      main > header .title b {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      main > header .title span {
+        color: var(--dim);
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+      }
+      #back {
+        display: none;
+      }
+      .view {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px;
+      }
+      /* chat */
+      #thread {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .msg {
+        max-width: min(760px, 88%);
+        padding: 9px 12px;
+        border-radius: var(--radius);
+        background: var(--panel2);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .msg.from-user {
+        align-self: flex-end;
+        background: var(--user);
+      }
+      .msg.peer {
+        background: var(--peer);
+      }
+      .msg.system {
+        align-self: center;
+        background: none;
+        color: var(--dim);
+        font-size: 12px;
+        padding: 2px;
+        text-align: center;
+        max-width: 95%;
+      }
+      .msg .who {
+        font-size: 11px;
+        color: var(--dim);
+        margin-bottom: 3px;
+        display: flex;
+        gap: 8px;
+      }
+      .msg.from-user .who {
+        color: #b9c8e3;
+      }
+      .msg pre {
+        background: #0b0d11;
+        padding: 8px;
+        border-radius: 8px;
+        overflow-x: auto;
+        font: 12.5px/1.4 var(--mono);
+        white-space: pre;
+        margin: 6px 0;
+      }
+      .msg code {
+        font-family: var(--mono);
+        font-size: 13px;
+        background: #0b0d11;
+        padding: 1px 4px;
+        border-radius: 4px;
+      }
+      .card-warn {
+        border: 1px solid var(--warn);
+        background: #2a2417;
+      }
+      .card-info {
+        border: 1px solid var(--info);
+        background: #17202c;
+      }
+      .preview {
+        font: 12px/1.4 var(--mono);
+        background: #0b0d11;
+        padding: 8px;
+        border-radius: 8px;
+        max-height: 220px;
+        overflow: auto;
+        margin: 6px 0;
+        white-space: pre-wrap;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+        flex-wrap: wrap;
+      }
+      .actions .allow {
+        background: var(--good);
+        border-color: var(--good);
+      }
+      .actions .deny {
+        background: var(--bad);
+        border-color: var(--bad);
+      }
+      .pending-tag {
+        font-size: 11px;
+        color: var(--warn);
+      }
+      #composer {
+        display: flex;
+        gap: 8px;
+        padding: 10px;
+        border-top: 1px solid var(--line);
+        background: var(--panel);
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+      }
+      #composer textarea {
+        resize: none;
+        max-height: 40vh;
+        min-height: 42px;
+      }
+      .empty {
+        margin: 40px auto;
+        color: var(--dim);
+        text-align: center;
+      }
+      /* dashboard */
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .tile {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .tile .n {
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .tile .l {
+        font-size: 12px;
+        color: var(--dim);
+      }
+      h3 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--dim);
+        margin: 18px 0 8px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 10px;
+      }
+      .box {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        cursor: pointer;
+      }
+      .box .row1 {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .bar {
+        height: 6px;
+        background: var(--panel2);
+        border-radius: 3px;
+        overflow: hidden;
+        margin: 8px 0 4px;
+        display: flex;
+      }
+      .bar span {
+        display: block;
+        height: 100%;
+      }
+      .feed .ev {
+        padding: 7px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+        display: flex;
+        gap: 8px;
+      }
+      .feed .ev time {
+        color: var(--dim);
+        flex: none;
+        width: 62px;
+      }
+      /* board */
+      .cols {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        align-items: start;
+      }
+      @media (max-width: 1100px) and (min-width: 761px) {
+        .cols {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
       }
-      renderNav(); refreshDashSoon();
-    }
-  };
-}
-function notify(title, body) {
-  if (document.visibilityState === 'visible' || !('Notification' in window) || Notification.permission !== 'granted') return;
-  try { new Notification(title, { body: String(body).slice(0, 160) }); } catch {}
-}
-document.addEventListener('click', () => { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); }, { once: true });
+      .col {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 8px;
+      }
+      .col h4 {
+        margin: 2px 4px 8px;
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .task {
+        background: var(--panel2);
+        border-radius: 10px;
+        padding: 9px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        border-left: 3px solid var(--line);
+      }
+      .task.p0 {
+        border-left-color: var(--bad);
+      }
+      .task.p1 {
+        border-left-color: var(--warn);
+      }
+      .task .t {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .task .s {
+        font-size: 12px;
+        color: var(--dim);
+        margin-top: 3px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      /* dialogs */
+      dialog {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 0;
+        width: min(720px, 96vw);
+        max-height: 90dvh;
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.6);
+      }
+      dialog .body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      dialog h2 {
+        margin: 0;
+        font-size: 17px;
+      }
+      dialog label {
+        font-size: 13px;
+        color: var(--dim);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      dialog .row {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      #pane {
+        font: 11.5px/1.35 var(--mono);
+        background: #0b0d11;
+        padding: 10px;
+        border-radius: 10px;
+        max-height: 60dvh;
+        overflow: auto;
+        white-space: pre;
+        margin: 0;
+      }
+      #keys {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      #results .hit {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+      }
+      #results .hit small {
+        color: var(--dim);
+      }
+      #results b {
+        color: var(--accent);
+      }
+      #login {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: var(--bg);
+        z-index: 10;
+      }
+      #login form {
+        width: min(360px, 90vw);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .err {
+        color: var(--bad);
+        font-size: 13px;
+        min-height: 1em;
+      }
+      #conn {
+        font-size: 11px;
+        color: var(--dim);
+      }
+      #conn.on {
+        color: var(--good);
+      }
+      body.observer .admin-only {
+        display: none !important;
+      }
+      @media (max-width: 760px) {
+        #app {
+          grid-template-columns: 1fr;
+        }
+        #app.in-main aside {
+          display: none;
+        }
+        #app:not(.in-main) main {
+          display: none;
+        }
+        #back {
+          display: inline-block;
+        }
+        .msg {
+          max-width: 92%;
+        }
+        .cols {
+          grid-template-columns: 1fr;
+        }
+        .two {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="login" class="hidden">
+      <form id="loginForm">
+        <h2 style="margin: 0">cc-hub</h2>
+        <input
+          id="tokenInput"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Admin or observer token"
+          required
+        />
+        <button class="primary" type="submit">Sign in</button>
+        <div class="err" id="loginErr"></div>
+      </form>
+    </div>
 
-async function boot() {
-  try { state.me = await api('/api/me'); } catch { return; }
-  document.body.classList.toggle('observer', state.me.level !== 'admin');
-  await refreshProjects();
-  connectWS();
-  openDash();
-  if (matchMedia('(max-width: 760px)').matches) $('#app').classList.remove('in-main');
-}
-boot();
-</script>
-</body>
+    <div id="app">
+      <aside>
+        <header>
+          <h1>cc-hub</h1>
+          <span id="conn">…</span>
+          <button class="small admin-only" id="searchBtn">Search</button>
+          <button class="small primary admin-only" id="newBtn">+ New</button>
+        </header>
+        <div id="nav"></div>
+      </aside>
+      <main>
+        <header>
+          <button class="small" id="back">‹</button>
+          <div class="title"><b id="curName">Dashboard</b><span id="curInfo"></span></div>
+          <button class="small admin-only hidden" id="termBtn">Terminal</button>
+          <button class="small admin-only hidden" id="moreBtn">⋯</button>
+        </header>
+        <div class="view" id="dashView"></div>
+        <div class="view hidden" id="boardView"></div>
+        <div class="view hidden" id="chatView"><div id="thread"></div></div>
+        <form id="composer" class="hidden admin-only">
+          <textarea id="input" rows="1" placeholder="Message…"></textarea>
+          <button class="primary" id="sendBtn">Send</button>
+        </form>
+      </main>
+    </div>
+
+    <dialog id="newDlg">
+      <div class="body">
+        <h2>New</h2>
+        <button id="newProjectBtn">Project (task board + vault folder)</button>
+        <button id="newSessionBtn">Session (start a Claude Code worker)</button>
+        <div class="row"><button data-close>Cancel</button></div>
+      </div>
+    </dialog>
+
+    <dialog id="projDlg">
+      <form class="body" id="projForm">
+        <h2>New project</h2>
+        <div class="two">
+          <label
+            >Slug
+            <input
+              name="slug"
+              required
+              pattern="[a-z0-9][a-z0-9\-]{0,39}"
+              placeholder="cfg-research"
+              autocapitalize="off"
+              autocorrect="off"
+          /></label>
+          <label>Title <input name="title" required placeholder="CFG + DDG reverse engineering" /></label>
+        </div>
+        <label>Goal / definition of done <textarea name="goal" rows="3"></textarea></label>
+        <label
+          >Repositories (one absolute path per line, optional)
+          <textarea name="repos" rows="2" autocapitalize="off"></textarea>
+        </label>
+        <div class="err" id="projErr"></div>
+        <div class="row">
+          <button type="button" data-close>Cancel</button><button class="primary" type="submit">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="sessDlg">
+      <form class="body" id="sessForm">
+        <h2>New session</h2>
+        <div class="two">
+          <label
+            >Name
+            <input
+              name="name"
+              required
+              pattern="[a-z0-9][a-z0-9\-]{0,31}"
+              placeholder="cfg-research-1"
+              autocapitalize="off"
+              autocorrect="off"
+          /></label>
+          <label
+            >Role template
+            <select name="template"></select
+          ></label>
+          <label
+            >Project
+            <select name="project"></select
+          ></label>
+          <label
+            >Permission mode
+            <select name="permission_mode"></select
+          ></label>
+        </div>
+        <label
+          >Working directory (or use repo + branch for an isolated worktree)
+          <input name="cwd" placeholder="/home/you/projects/repo" autocapitalize="off" autocorrect="off"
+        /></label>
+        <div class="two">
+          <label
+            >Repo <input name="repo" placeholder="/home/you/projects/repo" autocapitalize="off" autocorrect="off"
+          /></label>
+          <label>Branch <input name="branch" placeholder="feature/x" autocapitalize="off" autocorrect="off" /></label>
+        </div>
+        <label
+          >First message <textarea name="prompt" rows="4" placeholder="What should this session work on?"></textarea>
+        </label>
+        <div class="err" id="sessErr"></div>
+        <div class="row">
+          <button type="button" data-close>Cancel</button><button class="primary" type="submit">Start</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="taskDlg">
+      <div class="body">
+        <div class="row" style="justify-content: space-between; align-items: center">
+          <h2 id="taskTitle">Task</h2>
+          <button class="small" data-close>Close</button>
+        </div>
+        <div id="taskBody"></div>
+        <div class="two admin-only">
+          <label
+            >Status
+            <select id="taskStatus">
+              <option>todo</option>
+              <option>in_progress</option>
+              <option>review</option>
+              <option>blocked</option>
+              <option>done</option>
+              <option>cancelled</option>
+            </select></label
+          >
+          <label
+            >Assignee
+            <select id="taskAssignee"></select
+          ></label>
+        </div>
+        <div class="row admin-only"><button class="primary" id="taskSave">Save</button></div>
+      </div>
+    </dialog>
+
+    <dialog id="termDlg">
+      <div class="body">
+        <div class="row" style="justify-content: space-between; align-items: center">
+          <h2 id="termTitle">Terminal</h2>
+          <div>
+            <button class="small" id="termRefresh">Refresh</button> <button class="small" data-close>Close</button>
+          </div>
+        </div>
+        <pre id="pane"></pre>
+        <div id="keys"></div>
+      </div>
+    </dialog>
+
+    <dialog id="moreDlg">
+      <div class="body">
+        <h2 id="moreTitle">Session</h2>
+        <button id="restartBtn">Restart (fresh context)</button>
+        <button id="stopBtn">Stop (keep history)</button>
+        <button id="forgetBtn" style="color: var(--bad)">Stop and remove from list</button>
+        <button data-close>Close</button>
+      </div>
+    </dialog>
+
+    <dialog id="searchDlg">
+      <div class="body">
+        <div class="row" style="justify-content: space-between; align-items: center">
+          <h2>Search history</h2>
+          <button class="small" data-close>Close</button>
+        </div>
+        <form id="searchForm" style="display: flex; gap: 8px">
+          <input id="q" placeholder='e.g. "zero trust" geofence' autocapitalize="off" /><button class="primary">
+            Go
+          </button>
+        </form>
+        <div id="results"></div>
+      </div>
+    </dialog>
+
+    <script>
+      'use strict';
+      const $ = (s) => document.querySelector(s);
+      const el = (tag, props = {}, ...kids) => {
+        const e = document.createElement(tag);
+        for (const [k, v] of Object.entries(props)) {
+          if (k === 'class') e.className = v;
+          else if (k.startsWith('on')) e[k] = v;
+          else if (k === 'dataset') Object.assign(e.dataset, v);
+          else e.setAttribute(k, v);
+        }
+        for (const k of kids.flat())
+          if (k !== null && k !== undefined && k !== false) e.append(k instanceof Node ? k : String(k));
+        return e;
+      };
+      const state = {
+        me: null,
+        view: 'dash',
+        current: null,
+        project: null,
+        sessions: [],
+        projects: [],
+        tasks: [],
+        messages: new Map(),
+        unread: new Map(),
+        perms: new Map(),
+        dash: null,
+      };
+      const isAdmin = () => state.me?.level === 'admin';
+
+      async function api(path, opts = {}) {
+        const res = await fetch(path, {
+          ...opts,
+          credentials: 'same-origin',
+          headers: { ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+          body: opts.body ? JSON.stringify(opts.body) : undefined,
+        });
+        if (res.status === 401 && path !== '/api/login') {
+          showLogin();
+          throw new Error('login required');
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        return data;
+      }
+      function showLogin() {
+        $('#login').classList.remove('hidden');
+        $('#tokenInput').focus();
+      }
+      $('#loginForm').onsubmit = async (e) => {
+        e.preventDefault();
+        $('#loginErr').textContent = '';
+        try {
+          await api('/api/login', { method: 'POST', body: { token: $('#tokenInput').value } });
+          $('#login').classList.add('hidden');
+          boot();
+        } catch (err) {
+          $('#loginErr').textContent = err.message;
+        }
+      };
+
+      // ---------- helpers
+      function renderRich(target, text) {
+        text.split(/```[\w-]*\n?/).forEach((part, i) => {
+          if (i % 2 === 1) {
+            target.append(el('pre', {}, part.replace(/\n$/, '')));
+            return;
+          }
+          part.split(/(`[^`\n]+`)/).forEach((seg) => {
+            if (seg.length > 2 && seg.startsWith('`') && seg.endsWith('`'))
+              target.append(el('code', {}, seg.slice(1, -1)));
+            else if (seg) target.append(seg);
+          });
+        });
+      }
+      const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const ago = (ts) => {
+        if (!ts) return 'never';
+        const m = Math.round((Date.now() - new Date(ts)) / 60000);
+        return m < 1
+          ? 'now'
+          : m < 60
+            ? `${m}m ago`
+            : m < 1440
+              ? `${Math.round(m / 60)}h ago`
+              : `${Math.round(m / 1440)}d ago`;
+      };
+      const sessFlags = (s) => {
+        const out = [];
+        if (s.flags?.usage_limit) out.push(el('span', { class: 'pill bad' }, 'usage limit'));
+        if (s.flags?.waiting_dialog) out.push(el('span', { class: 'pill warn' }, 'waiting on dialog'));
+        if (s.flags?.stalled && s.status !== 'stopped')
+          out.push(el('span', { class: 'pill warn' }, `idle ${s.flags.idle_min}m`));
+        return out;
+      };
+      const dotClass = (s) =>
+        s.flags?.usage_limit || (s.flags?.stalled && s.status !== 'stopped')
+          ? 'alert'
+          : s.connected
+            ? 'online'
+            : s.status;
+
+      // ---------- navigation
+      function show(view) {
+        state.view = view;
+        $('#dashView').classList.toggle('hidden', view !== 'dash');
+        $('#boardView').classList.toggle('hidden', view !== 'board');
+        $('#chatView').classList.toggle('hidden', view !== 'chat');
+        $('#composer').classList.toggle('hidden', view !== 'chat' || !isAdmin());
+        $('#termBtn').classList.toggle('hidden', view !== 'chat');
+        $('#moreBtn').classList.toggle('hidden', view !== 'chat');
+        $('#app').classList.add('in-main');
+        renderNav();
+      }
+      $('#back').onclick = () => {
+        $('#app').classList.remove('in-main');
+      };
+
+      function renderNav() {
+        const nav = $('#nav');
+        nav.textContent = '';
+        nav.append(
+          el(
+            'div',
+            { class: 'item' + (state.view === 'dash' ? ' active' : ''), onclick: openDash },
+            el(
+              'div',
+              { class: 'meta' },
+              el('div', { class: 'name' }, 'Dashboard'),
+              el('div', { class: 'sub' }, 'Everything at a glance'),
+            ),
+          ),
+        );
+        nav.append(el('div', { class: 'section' }, el('span', {}, 'Projects')));
+        if (!state.projects.length) nav.append(el('div', { class: 'item dim' }, 'No projects yet'));
+        for (const p of state.projects) {
+          const c = p.task_counts || {};
+          const total = Object.values(c).reduce((a, b) => a + b, 0);
+          nav.append(
+            el(
+              'div',
+              {
+                class: 'item' + (state.view === 'board' && state.project === p.slug ? ' active' : ''),
+                onclick: () => openBoard(p.slug),
+              },
+              el(
+                'div',
+                { class: 'meta' },
+                el('div', { class: 'name' }, p.title),
+                el('div', { class: 'sub' }, `${p.status} · ${c.done || 0}/${total} done`),
+              ),
+            ),
+          );
+        }
+        nav.append(el('div', { class: 'section' }, el('span', {}, 'Sessions')));
+        for (const s of state.sessions) {
+          const n = state.unread.get(s.name) || 0;
+          nav.append(
+            el(
+              'div',
+              {
+                class: 'item' + (state.view === 'chat' && state.current === s.name ? ' active' : ''),
+                onclick: () => openSession(s.name),
+              },
+              el('span', { class: 'dot ' + dotClass(s) }),
+              el(
+                'div',
+                { class: 'meta' },
+                el(
+                  'div',
+                  { class: 'name' },
+                  s.name,
+                  ' ',
+                  el('span', { class: 'pill' + (s.role === 'orchestrator' ? ' lead' : '') }, s.template),
+                ),
+                el(
+                  'div',
+                  { class: 'sub' },
+                  `${s.connected ? 'online' : s.status}${s.project ? ' · ' + s.project : ''} · ${ago(s.last_activity)}`,
+                ),
+              ),
+              n ? el('span', { class: 'badge' }, n) : null,
+            ),
+          );
+        }
+        const cur = state.sessions.find((s) => s.name === state.current);
+        if (state.view === 'chat' && cur) {
+          $('#curInfo').textContent =
+            `${cur.template} · ${cur.connected ? 'online' : cur.status} · ${cur.worktree?.branch ? 'branch ' + cur.worktree.branch + ' · ' : ''}${cur.cwd}`;
+        }
+      }
+
+      // ---------- dashboard
+      async function openDash() {
+        state.view = 'dash';
+        $('#curName').textContent = 'Dashboard';
+        $('#curInfo').textContent = state.me.level === 'observer' ? 'read-only' : '';
+        show('dash');
+        state.dash = await api('/api/dashboard');
+        renderDash();
+      }
+      function renderDash() {
+        const d = state.dash;
+        if (!d) return;
+        const v = $('#dashView');
+        v.textContent = '';
+        const st = d.stats;
+        v.append(
+          el(
+            'div',
+            { class: 'tiles' },
+            [
+              ['in progress', st.tasks_in_progress],
+              ['blocked', st.tasks_blocked],
+              ['done (24h)', st.tasks_done_24h],
+              ['approvals', st.approvals_pending],
+              ['messages (24h)', st.messages_24h],
+              [
+                'workers',
+                `${d.sessions.filter((s) => s.role === 'worker' && s.status !== 'stopped').length}/${state.me.max_workers}`,
+              ],
+            ].map(([l, n]) => el('div', { class: 'tile' }, el('div', { class: 'n' }, n), el('div', { class: 'l' }, l))),
+          ),
+        );
+
+        if (d.approvals.length) {
+          v.append(el('h3', {}, 'Waiting on you'));
+          for (const a of d.approvals)
+            v.append(
+              approvalCard({
+                sender: a.session,
+                ts: a.created_at,
+                body: `${a.title}\n\n${a.body}`,
+                meta: { approval_id: a.id, title: a.title, status: a.status },
+              }),
+            );
+        }
+
+        v.append(el('h3', {}, 'Projects'));
+        const pg = el('div', { class: 'grid' });
+        if (!d.projects.length)
+          pg.append(
+            el(
+              'div',
+              { class: 'dim' },
+              isAdmin() ? 'No projects yet. Tell the lead about a problem, or use + New.' : 'No projects yet.',
+            ),
+          );
+        for (const p of d.projects) {
+          const c = p.task_counts || {};
+          const total = Object.values(c).reduce((a, b) => a + b, 0) || 1;
+          const seg = (k, color) => el('span', { style: `width:${((c[k] || 0) / total) * 100}%;background:${color}` });
+          pg.append(
+            el(
+              'div',
+              { class: 'box', onclick: () => openBoard(p.slug) },
+              el('div', { class: 'row1' }, el('b', {}, p.title), el('span', { class: 'pill' }, p.status)),
+              el(
+                'div',
+                { class: 'bar' },
+                seg('done', 'var(--good)'),
+                seg('review', 'var(--info)'),
+                seg('in_progress', 'var(--accent)'),
+                seg('blocked', 'var(--bad)'),
+              ),
+              el(
+                'div',
+                { class: 'dim', style: 'font-size:12px' },
+                ['done', 'review', 'in_progress', 'blocked', 'todo']
+                  .filter((k) => c[k])
+                  .map((k) => `${c[k]} ${k.replace('_', ' ')}`)
+                  .join(' · ') || 'no tasks yet',
+              ),
+            ),
+          );
+        }
+        v.append(pg);
+
+        v.append(el('h3', {}, 'Sessions'));
+        const sg = el('div', { class: 'grid' });
+        for (const s of d.sessions.filter((x) => x.status !== 'stopped')) {
+          sg.append(
+            el(
+              'div',
+              { class: 'box', onclick: () => openSession(s.name) },
+              el(
+                'div',
+                { class: 'row1' },
+                el(
+                  'span',
+                  {},
+                  el('span', { class: 'dot ' + dotClass(s), style: 'display:inline-block;margin-right:6px' }),
+                  el('b', {}, s.name),
+                ),
+                el('span', { class: 'pill' + (s.role === 'orchestrator' ? ' lead' : '') }, s.template),
+              ),
+              el(
+                'div',
+                { class: 'dim', style: 'font-size:12px;margin-top:4px' },
+                `${s.project || 'no project'} · active ${ago(s.last_activity)}`,
+              ),
+              el('div', { class: 'actions' }, sessFlags(s)),
+            ),
+          );
+        }
+        if (!sg.childElementCount) sg.append(el('div', { class: 'dim' }, 'No running sessions.'));
+        v.append(sg);
+
+        v.append(el('h3', {}, 'Activity'));
+        const feed = el('div', { class: 'feed' });
+        for (const a of d.activity) {
+          const text =
+            a.type === 'task'
+              ? `${a.who} · #${a.task_id} ${a.text} · ${
+                  Object.entries(a.detail)
+                    .filter(([k]) => ['status', 'assignee', 'created'].includes(k))
+                    .map(([k, val]) => (k === 'created' ? 'created' : `${k} → ${val}`))
+                    .join(', ') || 'updated'
+                }`
+              : `${a.who} → ${a.detail.recipient}${a.detail.kind !== 'chat' ? ` (${a.detail.kind.replace('_', ' ')})` : ''}: ${a.text}`;
+          feed.append(el('div', { class: 'ev' }, el('time', {}, fmtTime(a.ts)), el('span', {}, text)));
+        }
+        v.append(feed);
+      }
+
+      // ---------- board
+      async function openBoard(slug) {
+        state.project = slug;
+        const p = state.projects.find((x) => x.slug === slug);
+        $('#curName').textContent = p ? p.title : slug;
+        $('#curInfo').textContent = p ? `${p.status} · ${p.goal || ''}` : '';
+        show('board');
+        state.tasks = await api(`/api/projects/${slug}/tasks`);
+        renderBoard();
+      }
+      function renderBoard() {
+        const v = $('#boardView');
+        v.textContent = '';
+        const cols = [
+          ['todo', 'To do'],
+          ['in_progress', 'In progress'],
+          ['review', 'Review'],
+          ['blocked', 'Blocked'],
+          ['done', 'Done'],
+        ];
+        const wrap = el('div', { class: 'cols' });
+        for (const [key, label] of cols) {
+          const ts = state.tasks.filter((t) => t.status === key);
+          const col = el(
+            'div',
+            { class: 'col' },
+            el('h4', {}, el('span', {}, label), el('span', { class: 'dim' }, ts.length)),
+          );
+          for (const t of ts) {
+            col.append(
+              el(
+                'div',
+                { class: `task p${t.priority}`, onclick: () => openTask(t.id) },
+                el('div', { class: 't' }, `#${t.id} ${t.title}`),
+                el(
+                  'div',
+                  { class: 's' },
+                  el('span', {}, t.assignee || 'unassigned'),
+                  t.milestone ? el('span', { class: 'pill' }, t.milestone) : null,
+                  t.status === 'todo' && !t.deps_done
+                    ? el('span', { class: 'pill warn' }, `waits on ${t.depends_on.map((d) => '#' + d).join(' ')}`)
+                    : null,
+                ),
+              ),
+            );
+          }
+          wrap.append(col);
+        }
+        v.append(wrap);
+        if (!state.tasks.length)
+          v.append(el('div', { class: 'empty' }, 'No tasks yet. The lead creates them after you approve the plan.'));
+      }
+      async function openTask(id) {
+        const t = await api(`/api/tasks/${id}`);
+        $('#taskTitle').textContent = `#${t.id} ${t.title}`;
+        const b = $('#taskBody');
+        b.textContent = '';
+        const block = (label, text) => (text ? [el('h3', {}, label), el('div', { class: 'preview' }, text)] : []);
+        b.append(
+          el(
+            'div',
+            { class: 'dim' },
+            `${t.status} · P${t.priority} · ${t.assignee || 'unassigned'}${t.milestone ? ' · ' + t.milestone : ''}${t.depends_on.length ? ' · depends on ' + t.depends_on.map((d) => '#' + d).join(', ') : ''}`,
+          ),
+          ...block('Spec', t.spec),
+          ...block('Acceptance', t.acceptance),
+          ...block('Result', t.result),
+          el('h3', {}, 'History'),
+          el(
+            'div',
+            { class: 'feed' },
+            t.history.map((h) =>
+              el(
+                'div',
+                { class: 'ev' },
+                el('time', {}, fmtTime(h.ts)),
+                el('span', {}, `${h.actor}: ${JSON.stringify(h.change)}`),
+              ),
+            ),
+          ),
+        );
+        $('#taskStatus').value = t.status;
+        const sel = $('#taskAssignee');
+        sel.textContent = '';
+        sel.append(
+          el('option', { value: '' }, 'unassigned'),
+          ...state.sessions.map((s) => el('option', { value: s.name }, s.name)),
+        );
+        sel.value = t.assignee || '';
+        $('#taskSave').onclick = async () => {
+          const body = { status: $('#taskStatus').value };
+          if (sel.value && sel.value !== t.assignee) body.assignee = sel.value;
+          try {
+            await api(`/api/tasks/${t.id}`, { method: 'PATCH', body });
+            $('#taskDlg').close();
+          } catch (e) {
+            alert(e.message);
+          }
+        };
+        $('#taskDlg').showModal();
+      }
+
+      // ---------- chat
+      function msgEl(m) {
+        if (m.kind === 'system' || m.kind === 'permission_verdict' || m.kind === 'approval_response') {
+          return el(
+            'div',
+            { class: 'msg system' },
+            `${m.sender === 'hub' ? '' : m.sender + ': '}${m.body.split('\n')[0].slice(0, 300)} · ${fmtTime(m.ts)}`,
+          );
+        }
+        if (m.kind === 'permission_request') return permEl(m);
+        if (m.kind === 'approval_request') return approvalCard(m);
+        const fromUser = m.sender === 'user';
+        const peer = m.sender !== 'user' && m.recipient !== 'user';
+        const who = el(
+          'div',
+          { class: 'who' },
+          el('span', {}, fromUser ? 'you' : peer ? `${m.sender} → ${m.recipient}` : m.sender),
+          el('span', {}, fmtTime(m.ts)),
+        );
+        if (fromUser && !m.delivered_at && m.recipient !== 'user')
+          who.append(el('span', { class: 'pending-tag', dataset: { pendingFor: m.id } }, 'queued'));
+        const body = el('div');
+        renderRich(body, m.body);
+        return el('div', { class: 'msg' + (fromUser ? ' from-user' : '') + (peer ? ' peer' : '') }, who, body);
+      }
+      function permEl(m) {
+        const meta = m.meta || {};
+        const live = state.perms.get(`${m.sender}:${meta.request_id}`);
+        const actions = el('div', { class: 'actions' });
+        if (live && live.status === 'pending' && isAdmin()) {
+          for (const [label, behavior] of [
+            ['Allow', 'allow'],
+            ['Deny', 'deny'],
+          ]) {
+            actions.append(
+              el(
+                'button',
+                {
+                  class: behavior,
+                  onclick: async (e) => {
+                    actions.querySelectorAll('button').forEach((x) => (x.disabled = true));
+                    try {
+                      await api(`/api/permissions/${m.sender}/${meta.request_id}`, {
+                        method: 'POST',
+                        body: { behavior },
+                      });
+                      live.status = behavior;
+                      actions.textContent = behavior === 'allow' ? 'Allowed' : 'Denied';
+                    } catch (err) {
+                      actions.textContent = err.message;
+                    }
+                  },
+                },
+                label,
+              ),
+            );
+          }
+        } else actions.append(el('span', { class: 'pending-tag' }, 'answered or expired'));
+        return el(
+          'div',
+          { class: 'msg card-warn' },
+          el('div', { class: 'who' }, `${m.sender} wants to use ${meta.tool_name || 'a tool'} · ${fmtTime(m.ts)}`),
+          el('div', {}, meta.description || ''),
+          el('div', { class: 'preview' }, meta.input_preview || ''),
+          actions,
+        );
+      }
+      function approvalCard(m) {
+        const meta = m.meta || {};
+        const actions = el('div', { class: 'actions' });
+        const pending = state.dash?.approvals?.some((a) => a.id === meta.approval_id) ?? meta.status === 'pending';
+        if (pending && isAdmin()) {
+          const note = el('textarea', { rows: 2, placeholder: 'Changes or notes (required for Request changes)' });
+          const decide = async (decision) => {
+            actions.querySelectorAll('button').forEach((x) => (x.disabled = true));
+            try {
+              await api(`/api/approvals/${meta.approval_id}`, {
+                method: 'POST',
+                body: { decision, response: note.value },
+              });
+              actions.textContent = decision === 'approved' ? 'Approved' : 'Changes requested';
+            } catch (err) {
+              actions.querySelectorAll('button').forEach((x) => (x.disabled = false));
+              alert(err.message);
+            }
+          };
+          actions.append(
+            note,
+            el('button', { class: 'allow', onclick: () => decide('approved') }, 'Approve'),
+            el('button', { onclick: () => decide('changes_requested') }, 'Request changes'),
+          );
+        } else actions.append(el('span', { class: 'pending-tag' }, 'decided'));
+        const body = el('div');
+        renderRich(body, m.body);
+        return el(
+          'div',
+          { class: 'msg card-info' },
+          el('div', { class: 'who' }, `${m.sender} asks for approval · ${fmtTime(m.ts)}`),
+          body,
+          actions,
+        );
+      }
+      function renderThread() {
+        const t = $('#thread');
+        t.textContent = '';
+        const msgs = state.messages.get(state.current) || [];
+        if (!msgs.length) t.append(el('div', { class: 'empty' }, 'No messages yet.'));
+        for (const m of msgs) t.append(msgEl(m));
+        $('#chatView').scrollTop = $('#chatView').scrollHeight;
+      }
+      async function openSession(name) {
+        state.current = name;
+        state.unread.delete(name);
+        $('#curName').textContent = name;
+        show('chat');
+        if (!state.dash) state.dash = await api('/api/dashboard').catch(() => null);
+        state.messages.set(name, await api(`/api/sessions/${name}/messages`));
+        renderThread();
+      }
+      $('#composer').onsubmit = async (e) => {
+        e.preventDefault();
+        const text = $('#input').value.trim();
+        if (!text || !state.current) return;
+        $('#sendBtn').disabled = true;
+        try {
+          await api(`/api/sessions/${state.current}/messages`, { method: 'POST', body: { text } });
+          $('#input').value = '';
+          autosize();
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          $('#sendBtn').disabled = false;
+        }
+      };
+      const autosize = () => {
+        const i = $('#input');
+        i.style.height = 'auto';
+        i.style.height = Math.min(i.scrollHeight, innerHeight * 0.4) + 'px';
+      };
+      $('#input').addEventListener('input', autosize);
+      $('#input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && matchMedia('(pointer: fine)').matches) {
+          e.preventDefault();
+          $('#composer').requestSubmit();
+        }
+      });
+
+      // ---------- dialogs
+      document.querySelectorAll('[data-close]').forEach(
+        (b) =>
+          (b.onclick = (e) => {
+            e.preventDefault();
+            b.closest('dialog').close();
+          }),
+      );
+      $('#newBtn').onclick = () => $('#newDlg').showModal();
+      $('#newProjectBtn').onclick = () => {
+        $('#newDlg').close();
+        $('#projErr').textContent = '';
+        $('#projDlg').showModal();
+      };
+      $('#projForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(e.target));
+        f.repos = f.repos
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        try {
+          const p = await api('/api/projects', { method: 'POST', body: f });
+          $('#projDlg').close();
+          e.target.reset();
+          await refreshProjects();
+          openBoard(p.slug);
+        } catch (err) {
+          $('#projErr').textContent = err.message;
+        }
+      };
+      $('#newSessionBtn').onclick = () => {
+        $('#newDlg').close();
+        const f = $('#sessForm');
+        const fill = (sel, items, first) => {
+          sel.textContent = '';
+          if (first) sel.append(el('option', { value: '' }, first));
+          for (const [v, l] of items) sel.append(el('option', { value: v }, l));
+        };
+        fill(
+          f.template,
+          state.me.templates.filter((t) => t !== 'lead').map((t) => [t, t]),
+        );
+        f.template.value = 'general';
+        fill(
+          f.project,
+          state.projects.map((p) => [p.slug, p.title]),
+          'no project',
+        );
+        if (state.view === 'board') f.project.value = state.project;
+        fill(
+          f.permission_mode,
+          state.me.permission_modes.map((m) => [m, m]),
+        );
+        f.cwd.placeholder = (state.me.roots[0] || '/home/you') + '/project';
+        $('#sessErr').textContent = '';
+        $('#sessDlg').showModal();
+      };
+      $('#sessForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries([...new FormData(e.target)].filter(([, v]) => v !== ''));
+        try {
+          const s = await api('/api/sessions', { method: 'POST', body: f });
+          $('#sessDlg').close();
+          e.target.reset();
+          openSession(s.name);
+        } catch (err) {
+          $('#sessErr').textContent = err.message;
+        }
+      };
+      async function refreshPane() {
+        const { pane } = await api(`/api/sessions/${state.current}/pane`);
+        $('#pane').textContent = pane || '(empty or not running)';
+        $('#pane').scrollTop = $('#pane').scrollHeight;
+      }
+      $('#termBtn').onclick = async () => {
+        $('#termTitle').textContent = `Terminal: ${state.current}`;
+        const k = $('#keys');
+        k.textContent = '';
+        for (const key of state.me.keys) {
+          k.append(
+            el(
+              'button',
+              {
+                class: 'small',
+                onclick: async () => {
+                  await api(`/api/sessions/${state.current}/keys`, { method: 'POST', body: { keys: [key] } }).catch(
+                    (e) => alert(e.message),
+                  );
+                  setTimeout(refreshPane, 400);
+                },
+              },
+              key,
+            ),
+          );
+        }
+        $('#termDlg').showModal();
+        refreshPane().catch((e) => ($('#pane').textContent = e.message));
+      };
+      $('#termRefresh').onclick = () => refreshPane();
+      $('#moreBtn').onclick = () => {
+        $('#moreTitle').textContent = state.current;
+        $('#moreDlg').showModal();
+      };
+      $('#restartBtn').onclick = async () => {
+        if (confirm(`Restart ${state.current}? Its context is cleared; history stays searchable.`)) {
+          await api(`/api/sessions/${state.current}/restart`, { method: 'POST', body: {} }).catch((e) =>
+            alert(e.message),
+          );
+          $('#moreDlg').close();
+        }
+      };
+      $('#stopBtn').onclick = async () => {
+        if (confirm(`Stop ${state.current}?`)) {
+          await api(`/api/sessions/${state.current}`, { method: 'DELETE' }).catch((e) => alert(e.message));
+          $('#moreDlg').close();
+        }
+      };
+      $('#forgetBtn').onclick = async () => {
+        if (confirm(`Stop and remove ${state.current}? Messages stay in the database.`)) {
+          await api(`/api/sessions/${state.current}?forget=1`, { method: 'DELETE' }).catch((e) => alert(e.message));
+          $('#moreDlg').close();
+          openDash();
+        }
+      };
+      $('#searchBtn').onclick = () => {
+        $('#searchDlg').showModal();
+        $('#q').focus();
+      };
+      $('#searchForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const hits = await api('/api/search?q=' + encodeURIComponent($('#q').value));
+        const box = $('#results');
+        box.textContent = hits.length ? '' : 'No results.';
+        for (const h of hits) {
+          const p = el('div');
+          (h.snippet || h.body)
+            .split(/(<b>.*?<\/b>)/)
+            .forEach((seg) => p.append(seg.startsWith('<b>') ? el('b', {}, seg.slice(3, -4)) : seg));
+          const target = ['user', 'hub'].includes(h.sender) ? h.recipient : h.sender;
+          box.append(
+            el(
+              'div',
+              {
+                class: 'hit',
+                onclick: () => {
+                  $('#searchDlg').close();
+                  if (state.sessions.some((s) => s.name === target)) openSession(target);
+                },
+              },
+              el('small', {}, `${h.sender} → ${h.recipient} · ${new Date(h.ts).toLocaleString()}`),
+              p,
+            ),
+          );
+        }
+      };
+
+      // ---------- realtime
+      let dashTimer = null;
+      const refreshDashSoon = () => {
+        clearTimeout(dashTimer);
+        dashTimer = setTimeout(async () => {
+          if (state.view === 'dash') {
+            state.dash = await api('/api/dashboard');
+            renderDash();
+          }
+        }, 400);
+      };
+      async function refreshProjects() {
+        state.projects = await api('/api/projects');
+        renderNav();
+      }
+
+      function connectWS() {
+        const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/ui');
+        ws.onopen = () => {
+          $('#conn').textContent = '● live';
+          $('#conn').className = 'on';
+        };
+        ws.onclose = () => {
+          $('#conn').textContent = '○ reconnecting';
+          $('#conn').className = '';
+          setTimeout(connectWS, 2000);
+        };
+        ws.onmessage = async (ev) => {
+          const e = JSON.parse(ev.data);
+          if (e.type === 'sessions') {
+            state.sessions = e.sessions;
+            renderNav();
+            refreshDashSoon();
+          } else if (e.type === 'permissions') {
+            for (const p of e.pending) state.perms.set(`${p.session}:${p.request_id}`, p);
+          } else if (e.type === 'delivered') {
+            document.querySelectorAll(`[data-pending-for="${e.id}"]`).forEach((x) => x.remove());
+          } else if (e.type === 'projects') {
+            await refreshProjects();
+            refreshDashSoon();
+          } else if (e.type === 'approvals') {
+            state.dash = await api('/api/dashboard');
+            if (state.view === 'dash') renderDash();
+          } else if (e.type === 'task') {
+            refreshProjects();
+            refreshDashSoon();
+            if (state.view === 'board' && e.task.project === state.project) {
+              state.tasks = await api(`/api/projects/${state.project}/tasks`);
+              renderBoard();
+            }
+          } else if (e.type === 'message') {
+            const m = e.msg;
+            if (m.kind === 'permission_request') {
+              state.perms.set(`${m.sender}:${m.meta.request_id}`, { ...m.meta });
+              notify(`${m.sender} needs approval`, `${m.meta.tool_name}: ${m.meta.description}`);
+            } else if (m.kind === 'approval_request') {
+              state.dash = await api('/api/dashboard');
+              notify(`${m.sender} asks for approval`, m.meta.title || '');
+            } else if (m.recipient === 'user' && m.kind === 'chat') notify(m.sender, m.body);
+            for (const name of new Set([m.sender, m.recipient])) {
+              if (name === 'user' || name === 'hub') continue;
+              if (state.messages.has(name)) state.messages.get(name).push(m);
+              if (state.view === 'chat' && name === state.current) {
+                const v = $('#chatView');
+                const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 80;
+                $('#thread .empty')?.remove();
+                $('#thread').append(msgEl(m));
+                if (atBottom || m.sender === 'user') v.scrollTop = v.scrollHeight;
+              } else if (m.recipient === 'user' && m.kind !== 'system') {
+                state.unread.set(name, (state.unread.get(name) || 0) + 1);
+              }
+            }
+            renderNav();
+            refreshDashSoon();
+          }
+        };
+      }
+      function notify(title, body) {
+        if (
+          document.visibilityState === 'visible' ||
+          !('Notification' in window) ||
+          Notification.permission !== 'granted'
+        )
+          return;
+        try {
+          new Notification(title, { body: String(body).slice(0, 160) });
+        } catch {}
+      }
+      document.addEventListener(
+        'click',
+        () => {
+          if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+        },
+        { once: true },
+      );
+
+      async function boot() {
+        try {
+          state.me = await api('/api/me');
+        } catch {
+          return;
+        }
+        document.body.classList.toggle('observer', state.me.level !== 'admin');
+        await refreshProjects();
+        connectWS();
+        openDash();
+        if (matchMedia('(max-width: 760px)').matches) $('#app').classList.remove('in-main');
+      }
+      boot();
+    </script>
+  </body>
 </html>

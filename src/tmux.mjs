@@ -30,12 +30,17 @@ export async function hasSession(name) {
 export async function listSessions() {
   const out = await tmux(['list-sessions', '-F', '#{session_name}'], { allowFail: true });
   if (!out) return [];
-  return out.split('\n').filter((s) => s.startsWith(PREFIX)).map((s) => s.slice(PREFIX.length));
+  return out
+    .split('\n')
+    .filter((s) => s.startsWith(PREFIX))
+    .map((s) => s.slice(PREFIX.length));
 }
 
 /** Start a detached tmux session running argv (an array) in cwd. */
 export async function newSession(name, cwd, argv, env = {}) {
-  const envPrefix = Object.entries(env).map(([k, v]) => `${k}=${shQuote(v)}`).join(' ');
+  const envPrefix = Object.entries(env)
+    .map(([k, v]) => `${k}=${shQuote(v)}`)
+    .join(' ');
   const cmd = `${envPrefix ? `env ${envPrefix} ` : ''}${argv.map(shQuote).join(' ')}`;
   await tmux(['new-session', '-d', '-s', tmuxName(name), '-c', cwd, '-x', '200', '-y', '50', cmd]);
   // Keep the pane around if claude exits so the user can see why.
@@ -47,12 +52,29 @@ export async function killSession(name) {
 }
 
 export async function capturePane(name, lines = 200) {
-  const out = await tmux(['capture-pane', '-p', '-J', '-t', `=${tmuxName(name)}:`, '-S', `-${lines}`], { allowFail: true });
+  const out = await tmux(['capture-pane', '-p', '-J', '-t', `=${tmuxName(name)}:`, '-S', `-${lines}`], {
+    allowFail: true,
+  });
   return out ?? '';
 }
 
 // Only these named keys can be sent from the UI or the orchestrator.
-export const ALLOWED_KEYS = new Set(['Enter', 'Escape', 'Up', 'Down', 'Left', 'Right', 'Tab', 'BTab', 'C-c', '1', '2', '3', 'y', 'n']);
+export const ALLOWED_KEYS = new Set([
+  'Enter',
+  'Escape',
+  'Up',
+  'Down',
+  'Left',
+  'Right',
+  'Tab',
+  'BTab',
+  'C-c',
+  '1',
+  '2',
+  '3',
+  'y',
+  'n',
+]);
 
 export async function sendKeys(name, keys) {
   for (const k of keys) {
