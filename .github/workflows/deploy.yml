@@ -5,7 +5,7 @@
 # ephemeral, tagged Tailscale node and SSHes to the server over it, so the
 # server never exposes SSH to the internet. Pull requests never deploy.
 #
-# Setup: docs/HOSTING.md. Repo variables: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH (optional).
+# Setup: docs/HOSTING.md. Repo variables: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH (optional), SITE_URL (optional).
 # Repo secrets: TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET, DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS.
 name: deploy
 on:
@@ -59,3 +59,15 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=yes -o BatchMode=yes "$USER_NAME@$HOST" \
             "cd $DEPLOY_PATH && ./scripts/update.sh main"
+
+      # Like the CLMS deploy: check the public URL, so a broken tunnel or DNS fails
+      # the deploy too. Needs a Cloudflare Access Bypass policy for /healthz.
+      - name: Check the public site is up
+        if: vars.SITE_URL != ''
+        env: { SITE_URL: "${{ vars.SITE_URL }}" }
+        run: |
+          for _ in $(seq 1 18); do
+            if curl -fsS "$SITE_URL/healthz" | grep -q '"ok":true'; then echo "$SITE_URL is up"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::$SITE_URL/healthz did not respond within 3 minutes"; exit 1

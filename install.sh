@@ -40,6 +40,14 @@ fi
 
 if grep -qi microsoft /proc/version 2>/dev/null && command -v powershell.exe >/dev/null; then
   ./scripts/windows-autostart.sh --no-sleep-on-ac
+elif [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+  # Server: run as a systemd user service that starts on boot and restarts on failure.
+  mkdir -p ~/.config/systemd/user
+  sed "s|%CCHUB_DIR%|$DIR|g" deploy/cc-hub.service > ~/.config/systemd/user/cc-hub.service
+  systemctl --user daemon-reload
+  systemctl --user enable --now cc-hub
+  sudo loginctl enable-linger "$USER"   # keep running after logout and start at boot
+  echo "Installed systemd service cc-hub (logs: journalctl --user -u cc-hub -f)"
 else
   ./scripts/start.sh
 fi
