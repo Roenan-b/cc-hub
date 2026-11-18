@@ -3,7 +3,28 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Orchestrate many Claude Code sessions in tmux, talk to them from a browser or phone over Claude Code channels, and keep every message in Postgres.",
+  "description": "Run a team of Claude Code agents from one conversation: tmux-orchestrated sessions, Claude Code channels, a web and phone dashboard, Postgres history and an Obsidian knowledge vault.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai-agents",
+    "multi-agent",
+    "mcp",
+    "orchestration",
+    "tmux",
+    "obsidian",
+    "postgres"
+  ],
+  "homepage": "https://github.com/Roenan-b/cc-hub#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Roenan-b/cc-hub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Roenan-b/cc-hub/issues"
+  },
+  "author": "Roenan Bingle",
+  "license": "MIT",
   "engines": {
     "node": ">=20"
   },
@@ -12,20 +33,29 @@
     "hub": "node src/hub.mjs",
     "db:init": "node src/db.mjs --init",
     "test": "node test/e2e.mjs",
-    "check": "for f in src/*.mjs test/*.mjs; do node --check $f || exit 1; done"
+    "test:e2e": "node test/e2e.mjs",
+    "lint": "npm run lint:js && npm run lint:format && npm run lint:md",
+    "lint:js": "eslint .",
+    "lint:format": "prettier --check .",
+    "lint:md": "markdownlint-cli2",
+    "lint:sh": "shellcheck -x -S warning install.sh scripts/*.sh test/fake-claude",
+    "format": "prettier --write .",
+    "lint:fix": "eslint . --fix && prettier --write ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
     "pg": "^8.12.0",
     "ws": "^8.18.0",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
-  "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.15.0",
     "globals": "^17.14.0",
     "markdownlint-cli2": "^0.24.1",
     "prettier": "^3.10.1"
+  },
+  "overrides": {
+    "katex": "^0.19.1"
   }
 }

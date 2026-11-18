@@ -21,5 +21,6 @@
     "MD041": false,
     "MD024": { "siblings_only": true },
   },
+  "globs": ["**/*.md"],
   "ignores": ["node_modules/**", "vault-template/**", "roles/**", "orchestrator/**", "CHANGELOG.md"],
 }
