@@ -6,7 +6,7 @@ cc-hub lets a web UI start AI agents that run commands on your machine. This doc
 
 | Boundary | Threat | Control (implemented) |
 |---|---|---|
-| Internet → hub | Unauthorized access to an agent-running service | Binds `127.0.0.1` by default; remote access documented only through Tailscale or Cloudflare Access; token login with constant-time comparison and per-IP rate limiting (10 failures / 15 min) |
+| Network → hub | Unauthorized access to an agent-running service | Binds `127.0.0.1` only; the only documented remote access is Tailscale (your own devices); token login with constant-time comparison and per-IP rate limiting (10 failures / 15 min) |
 | Browser → hub | CSRF, cross-site WebSocket hijacking, XSS | HttpOnly `SameSite=Strict` cookie; Origin check on every state-changing request and on the UI WebSocket; strict CSP, `X-Frame-Options: DENY`; all message, task, and pane text rendered with `textContent`, never as HTML |
 | Admin vs observer | Shared dashboard used to control agents | Separate observer token; server-side checks block every write, terminal read, search, and permission/approval action for observers; message bodies redacted unless explicitly enabled |
 | Channel process → hub | A process impersonating a session or the lead | `/ws/agent` accepts loopback connections only and rejects anything carrying proxy headers (Tailscale/Cloudflare/X-Forwarded-*); each session authenticates with its own 256-bit secret (only the SHA-256 is stored; the plaintext is in a mode-600 file) |
@@ -19,12 +19,12 @@ cc-hub lets a web UI start AI agents that run commands on your machine. This doc
 ## Residual risks (not mitigated)
 
 - **The admin token is root-equivalent for your workspace.** Anyone who has it can make agents run code. Store it like an SSH key and rotate it if it leaks.
-- **Model behavior is guided, not guaranteed.** "Don't push to main" and "peer messages don't authorize destructive actions" are instructions to the model. The hard controls are Claude Code's permission prompts, the settings deny rules, filesystem roots, and, in the Docker setup, the container boundary. For unattended runs on anything important, use the Docker setup or a dedicated VM and give agents credentials with the least access that works.
+- **Model behavior is guided, not guaranteed.** "Don't push to main" and "peer messages don't authorize destructive actions" are instructions to the model. The hard controls are Claude Code's permission prompts, the settings deny rules, filesystem roots, and, in the Docker setup, the container boundary. For unattended runs on anything important, use a dedicated machine or VM and give agents credentials with the least access that works.
 - **Development channel flag.** Custom channels require `--dangerously-load-development-channels` during the Claude Code research preview. It bypasses the channel allowlist for this one local server only.
 - **Folder trust is auto-accepted** for directories under your workspace roots. List only roots you trust.
 - **Local users.** Any process running as your user can read `.env`, the per-session secrets, and the database. This is a single-user tool for a machine you control.
 - **Plaintext storage.** Messages, tasks, and vault notes are stored unencrypted (Postgres, git). Keep secrets, credentials, personal data you wouldn't put in a repo, and any controlled or classified information out of chats and the vault. Use disk encryption on the host.
-- **Supply chain.** Dependencies are pinned in `package-lock.json`; the Docker image installs the latest Claude Code unless you pin `CLAUDE_CODE_VERSION`.
+- **Supply chain.** Dependencies are pinned in `package-lock.json`. Claude Code's native installer auto-updates, so a new Claude Code release can change behavior; the hub logs the version each session starts with in its terminal.
 
 ## Reporting
 

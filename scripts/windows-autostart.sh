@@ -5,7 +5,7 @@
 #   ./scripts/windows-autostart.sh --uninstall
 set -euo pipefail
 cd "$(dirname "$0")/.."
-grep -qi microsoft /proc/version || { echo "This is for WSL. On Linux use deploy/cc-hub.service (docs/DEPLOY.md)."; exit 1; }
+grep -qi microsoft /proc/version || { echo "This is for WSL. On Linux, install.sh sets up the systemd service (docs/SETUP-LINUX.md)."; exit 1; }
 [ -n "${WSL_DISTRO_NAME:-}" ] || { echo "WSL_DISTRO_NAME is not set; run this from a WSL terminal."; exit 1; }
 
 ps1=$(wslpath -w "$PWD/deploy/windows/install-autostart.ps1")

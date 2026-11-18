@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Update this install to the latest main and restart the hub, rolling back if
 # the new version fails its health check. Agent sessions keep running.
-# Used by the GitHub deploy workflow (over SSH) and safe to run by hand.
+# Run by hand (or by install.sh) to update a local install.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/bin:$PATH"

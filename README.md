@@ -38,25 +38,29 @@ cc-hub turns [Claude Code](https://code.claude.com) into a team: a **lead** sess
 
 ## Quick start
 
-One command does the entire setup: dependencies, local Postgres, Claude Code, tokens, the Obsidian vault, start-at-login, and (on Windows) Obsidian and Tailscale for phone access.
+cc-hub runs **locally on each machine**. One command sets everything up: dependencies, a local Postgres database, Claude Code, login tokens, and the Obsidian vault. From then on it starts by itself every time the machine boots (or you log in), so the dashboard is always at **http://localhost:8787** and every agent has the Postgres history and the vault available. Work pauses while the machine is asleep or off and resumes on its own.
 
 **Windows (PowerShell, not admin):**
 ```powershell
 irm https://raw.githubusercontent.com/Roenan-b/cc-hub/main/install.ps1 | iex
 ```
 
-**Ubuntu / Debian / inside WSL:**
+**Ubuntu / Debian:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Roenan-b/cc-hub/main/install.sh | bash
 ```
 
-You'll be asked for your sudo password, which folders agents may work in, and to `/login` to Claude Code once. Re-run the same command to update. Using a fork? Set `CCHUB_REPO=<you>/cc-hub` first (`$env:CCHUB_REPO = "<you>/cc-hub"` in PowerShell). Read the installer before piping it to a shell; it is short.
+You'll be asked for your sudo password, which folders agents may work in, and to `/login` to Claude Code once. Re-run the same command to update; it keeps your `.env`, database, and vault. Using a fork? Set `CCHUB_REPO=<you>/cc-hub` first (`$env:CCHUB_REPO = "<you>/cc-hub"` in PowerShell). Read the installer before piping it to a shell; it is short.
 
-Requirements are installed for you: Node 20+, tmux, git, Postgres, and Claude Code **2.1.80+**. Channels are a Claude Code research preview; on Team/Enterprise plans an admin must enable them. Windows details: **[docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md)**.
+| Platform | Starts automatically via | Guide |
+|---|---|---|
+| Windows 10/11 + WSL2 (Ubuntu) | Startup-folder launcher that also keeps WSL running | [docs/SETUP-WINDOWS.md](docs/SETUP-WINDOWS.md) |
+| Ubuntu / Debian | systemd user service (enabled with linger, so it starts at boot) | [docs/SETUP-LINUX.md](docs/SETUP-LINUX.md) |
+| macOS | not supported yet (contributions welcome) | |
 
-**Always-on server or Docker:** see **[docs/DEPLOY.md](docs/DEPLOY.md)** (systemd, Docker, Tailscale, Cloudflare Access).
+Requirements are installed for you: Node 20+, tmux, git, Postgres, and Claude Code **2.1.80+**. Channels are a Claude Code research preview; on Team/Enterprise plans an admin must enable them.
 
-The hub survives sleep and reboots: on wake it resets stall timers instead of restarting healthy workers, and after a reboot it restarts the workers that were running and briefs the lead.
+**Optional extras:** reach your machine's dashboard from your phone with Tailscale (`tailscale serve --bg 8787`, private to your devices), and keep the vault in step across machines by setting `HUB_VAULT_REMOTE` to a private git repo.
 
 ## Your first project
 
@@ -123,7 +127,7 @@ src/vault.mjs      vault and project scaffolding
 db/schema.sql      Postgres schema (applied on every start, idempotent)
 public/index.html  dashboard, boards, chat, approvals (no build step)
 roles/             role briefs   settings/   permission presets   vault-template/
-deploy/            systemd unit, Windows bootstrap and autostart   docs/   setup, deployment
+deploy/            systemd unit, Windows bootstrap and autostart   docs/   setup guides
 test/              end-to-end suite with a stand-in Claude CLI
 ```
 
@@ -141,7 +145,7 @@ CI runs the same suite on every push. The stand-in does not prove behavior again
 
 ## Security
 
-Read **[SECURITY.md](SECURITY.md)** before exposing the hub beyond your machine. In short: the admin token can run code in your workspace, so keep the hub on loopback behind Tailscale or Cloudflare Access, and keep secrets out of chats and the vault.
+Read **[SECURITY.md](SECURITY.md)**. In short: the hub listens only on localhost; the admin token can run code in your workspace, so treat it like an SSH key; for phone access use Tailscale (private to your devices), never a public port; and keep secrets out of chats and the vault.
 
 ## License
 

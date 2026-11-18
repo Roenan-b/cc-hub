@@ -66,6 +66,6 @@ Remove autostart: `./scripts/windows-autostart.sh --uninstall`.
 - **Obsidian opened an empty window:** choose "Open folder as vault" and pick `Documents\Vault`.
 - **Tailscale serve asks to enable HTTPS:** open the link it prints, enable Serve for your tailnet, and run `tailscale serve --bg 8787` again in PowerShell.
 
-## Want it running when the laptop is closed?
+## Using more than one machine
 
-Move the hub to an always-on machine (a lab PC, home server, or small cloud server) with [DEPLOY.md](DEPLOY.md). The vault can stay on your laptop through Obsidian Sync or a git remote.
+Each machine runs its own cc-hub with its own database. To share one vault between them, create a **private** git repo and set `HUB_VAULT_REMOTE=git@github.com:<you>/vault.git` in each machine's `.env`; each hub then commits, pulls, and pushes the vault every few minutes and tells you on the dashboard if the same note changed in two places at once. Message history and task boards stay per machine.

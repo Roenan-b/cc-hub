@@ -21,7 +21,7 @@ NEEDS_WSL_RESTART=0
 is_wsl() { grep -qi microsoft /proc/version 2>/dev/null; }
 
 [ "$(id -u)" -ne 0 ] || { echo "Run as your normal user, not root (sudo is used where needed)."; exit 1; }
-command -v apt-get >/dev/null || { echo "This script supports Ubuntu/Debian (including WSL). See docs/DEPLOY.md for other systems."; exit 1; }
+command -v apt-get >/dev/null || { echo "This script supports Ubuntu/Debian (including WSL). macOS and other systems are not supported yet."; exit 1; }
 
 # ---------------------------------------------------------------- packages
 say "System packages"
