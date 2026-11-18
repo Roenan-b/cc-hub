@@ -6,6 +6,8 @@ This vault is shared by the human and by every Claude Code session on cc-hub. Po
 - `Me/`: who the human is. `Me/Working with me.md` is loaded into every agent's system prompt (preferences and hard rules); `Me/About me.md` summarizes them and their work. **Owned by the human: agents never edit `Me/`**; propose changes in a reply instead. `Me/Identity.md` (if present) is for filling forms only: never copy it elsewhere.
 - `Personal/`: the human's private life context (people, health, money, routines). Read only when a task involves it; never edit, quote, or mention it in work output or to other agents otherwise.
 - `Areas/`: ongoing responsibilities that aren't hub projects.
+- `Career/`, `Courses/`: optional human-owned folders (applications, resume, courses).
+- `Bases/` and `Dashboard.md`: Obsidian Bases grid views over note properties. Give new notes `type` and `summary` front matter so they appear in the grids.
 - `Projects/<slug>/<slug>.md`: project index. Goal, status, milestones, links to everything below. Owned by the lead.
 - `Projects/<slug>/Plan.md`: the approved plan. Owned by the lead.
 - `Projects/<slug>/Decisions/`: one note per decision, from [[Templates/Decision]]. Append-only; supersede rather than rewrite.
@@ -22,6 +24,8 @@ This vault is shared by the human and by every Claude Code session on cc-hub. Po
 4. **Front matter** on new notes:
    ```yaml
    ---
+   type: note
+   summary: "<one line>"
    project: <slug>
    task: <id or none>
    author: <session name>
