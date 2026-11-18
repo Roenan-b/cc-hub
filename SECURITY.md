@@ -24,8 +24,48 @@ cc-hub lets a web UI start AI agents that run commands on your machine. This doc
 - **Folder trust is auto-accepted** for directories under your workspace roots. List only roots you trust.
 - **Local users.** Any process running as your user can read `.env`, the per-session secrets, and the database. This is a single-user tool for a machine you control.
 - **Plaintext storage.** Messages, tasks, and vault notes are stored unencrypted (Postgres, git). Keep secrets, credentials, personal data you wouldn't put in a repo, and any controlled or classified information out of chats and the vault. Use disk encryption on the host.
-- **Supply chain.** Dependencies are pinned in `package-lock.json`. Claude Code's native installer auto-updates, so a new Claude Code release can change behavior; the hub logs the version each session starts with in its terminal.
+- **Claude Code updates.** Claude Code's native installer auto-updates, so a new Claude Code release can change behavior. The hub logs the version each session starts with in its terminal.
+- **Dev-only advisories.** `npm audit` reports a ReDoS advisory in `picomatch` (GHSA-fc5q-39xc-vjpf) that has no patched release. It is reached only through dev tooling (markdownlint) matching glob patterns from this repo's own config, never user input. Production dependencies are audited and must be clean to merge.
 
-## Reporting
+## Supply chain
 
-Please report vulnerabilities privately through GitHub security advisories on this repository rather than in public issues.
+| Control                               | How                                                                                                                                           |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Locked dependencies                   | `package-lock.json`, installed with `npm ci`                                                                                                  |
+| Dependency updates                    | Dependabot weekly for npm and GitHub Actions                                                                                                  |
+| Vulnerable or disallowed dependencies | `npm audit --omit=dev --audit-level=high` blocks merges; dependency review blocks PRs that add high-severity or GPL/AGPL runtime dependencies |
+| Pinned CI actions                     | Every third-party action is pinned to a full commit SHA                                                                                       |
+| Least-privilege CI                    | Workflows default to `contents: read`; jobs request only what they need; checkouts don't persist credentials                                  |
+| Static analysis                       | CodeQL (`security-extended`) on JavaScript and workflow files                                                                                 |
+| Secret scanning                       | gitleaks over the full git history on every push and PR                                                                                       |
+| Signed releases                       | Release assets ship with `SHA256SUMS` and Sigstore build provenance                                                                           |
+| Posture                               | OpenSSF Scorecard runs weekly                                                                                                                 |
+
+## Verifying releases
+
+Each [GitHub release](https://github.com/Roenan-b/cc-hub/releases) includes source archives, the installers, `SHA256SUMS`, and a build provenance attestation signed through Sigstore by the release workflow.
+
+```bash
+gh release download v0.3.0 --repo Roenan-b/cc-hub
+sha256sum -c SHA256SUMS
+gh attestation verify cc-hub-v0.3.0.zip --repo Roenan-b/cc-hub
+```
+
+## Supported versions
+
+Security fixes go into the latest release only. Upgrade by re-running the installer or `scripts/update.sh`.
+
+| Version        | Supported |
+| -------------- | --------- |
+| Latest release | Yes       |
+| Older releases | No        |
+
+## Reporting a vulnerability
+
+Please report vulnerabilities **privately** through a [GitHub security advisory](https://github.com/Roenan-b/cc-hub/security/advisories/new), never in a public issue. Include the affected version or commit, steps to reproduce, and the impact you expect.
+
+- Acknowledgement within 3 business days.
+- An initial assessment and planned fix timeline within 10 business days.
+- Credit in the release notes if you want it, once a fix is released.
+
+Please don't test against systems you don't own, and give us a reasonable chance to fix the issue before disclosing it.

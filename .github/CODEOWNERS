@@ -1,0 +1,11 @@
+# Default owner for everything.
+*                     @Roenan-b
+
+# Security-sensitive paths: auth, role enforcement, permissions, installers, CI.
+/src/hub.mjs          @Roenan-b
+/src/core.mjs         @Roenan-b
+/settings/            @Roenan-b
+/install.*            @Roenan-b
+/deploy/              @Roenan-b
+/.github/             @Roenan-b
+/SECURITY.md          @Roenan-b
