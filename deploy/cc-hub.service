@@ -1,0 +1,23 @@
+# systemd user unit: keeps the hub running 24/7 and restarts it on failure.
+# Install:
+#   mkdir -p ~/.config/systemd/user && cp deploy/cc-hub.service ~/.config/systemd/user/
+#   sed -i "s|%CCHUB_DIR%|$PWD|" ~/.config/systemd/user/cc-hub.service
+#   systemctl --user daemon-reload && systemctl --user enable --now cc-hub
+#   sudo loginctl enable-linger "$USER"     # keep running after logout / on boot
+[Unit]
+Description=cc-hub (Claude Code team hub)
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=%CCHUB_DIR%
+ExecStartPre=/usr/bin/env docker compose up -d --wait db
+ExecStart=/usr/bin/env node src/hub.mjs
+Restart=on-failure
+RestartSec=5
+# The hub starts Claude sessions in tmux; they must survive hub restarts.
+KillMode=process
+Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

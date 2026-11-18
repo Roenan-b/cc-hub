@@ -1,0 +1,5 @@
+node_modules/
+.env
+hub.log
+workspace/
+vault/

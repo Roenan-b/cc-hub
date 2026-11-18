@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cchub
+          POSTGRES_PASSWORD: cchub
+          POSTGRES_DB: cchub_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cchub -d cchub_test" --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: sudo apt-get update && sudo apt-get install -y tmux
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+        env:
+          TEST_DATABASE_URL: postgres://cchub:cchub@127.0.0.1:5432/cchub_test

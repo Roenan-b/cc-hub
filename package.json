@@ -1,0 +1,24 @@
+{
+  "name": "cc-hub",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Orchestrate many Claude Code sessions in tmux, talk to them from a browser or phone over Claude Code channels, and keep every message in Postgres.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/hub.mjs",
+    "hub": "node src/hub.mjs",
+    "db:init": "node src/db.mjs --init",
+    "test": "node test/e2e.mjs",
+    "check": "for f in src/*.mjs test/*.mjs; do node --check $f || exit 1; done"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "pg": "^8.12.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "license": "MIT"
+}

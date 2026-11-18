@@ -1,0 +1,43 @@
+# Two ways to run:
+#   Native (default):  docker compose up -d db      -> Postgres only; hub runs on the host (scripts/start.sh)
+#   All in Docker:     docker compose --profile docker up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cchub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: cchub
+    ports:
+      - "127.0.0.1:5433:5432"   # loopback only
+    volumes:
+      - cchub-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cchub -d cchub"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  hub:
+    profiles: ["docker"]
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://cchub:${POSTGRES_PASSWORD}@db:5432/cchub
+      HUB_HOST: 0.0.0.0
+      HUB_VAULT: /vault
+      HUB_WORKSPACE_ROOTS: /workspace
+      HUB_STATE_DIR: /home/agent/.cc-hub
+    ports:
+      - "127.0.0.1:8787:8787"   # put Tailscale or Cloudflare Tunnel in front; never publish publicly
+    volumes:
+      - agent-home:/home/agent             # Claude Code login, settings, hub state
+      - ${CCHUB_WORKSPACE:-./workspace}:/workspace
+      - ${CCHUB_VAULT:-./vault}:/vault
+volumes:
+  cchub-pg:
+  agent-home:
