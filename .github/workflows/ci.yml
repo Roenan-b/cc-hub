@@ -1,12 +1,93 @@
-name: ci
+name: CI
+
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test:
+  lint:
+    name: Lint (JS, format, Markdown)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:js
+      - run: npm run lint:format
+      - run: npm run lint:md
+
+  shell:
+    name: Lint (shell)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: shellcheck
+        run: shellcheck --version && shellcheck -x -S warning install.sh scripts/*.sh test/fake-claude
+
+  powershell:
+    name: Lint (PowerShell)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Parse (PowerShell 7)
+        shell: pwsh
+        run: ./scripts/ci/Test-PowerShellSyntax.ps1
+      - name: Parse (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./scripts/ci/Test-PowerShellSyntax.ps1
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          $r | ForEach-Object { $lvl = if ($_.Severity -eq 'Error') { 'error' } else { 'warning' }; "::$lvl file=$($_.ScriptPath),line=$($_.Line)::[$($_.RuleName)] $($_.Message)" }
+          if ($r | Where-Object Severity -eq 'Error') { exit 1 }
+
+  actionlint:
+    name: Lint (workflows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+
+  test:
+    name: E2E (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
     services:
       postgres:
         image: postgres:16
@@ -16,14 +97,68 @@ jobs:
           POSTGRES_DB: cchub_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U cchub -d cchub_test" --health-interval 2s --health-timeout 3s --health-retries 30
+          --health-cmd "pg_isready -U cchub -d cchub_test"
+          --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
+      - uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
       - run: sudo apt-get update && sudo apt-get install -y tmux
       - run: npm ci
-      - run: npm run check
       - run: npm test
         env:
           TEST_DATABASE_URL: postgres://cchub:cchub@127.0.0.1:5432/cchub_test
+
+  smoke:
+    name: Smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Every module parses
+        shell: bash
+        run: for f in src/*.mjs test/*.mjs; do node --check "$f"; done
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Production dependencies (blocking)
+        run: npm audit --omit=dev --audit-level=high
+      - name: All dependencies (report only)
+        run: npm audit || true
+
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs: [lint, shell, powershell, actionlint, test, smoke, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to succeed
+        run: |
+          echo '${{ toJSON(needs) }}' | jq -e 'to_entries | all(.value.result == "success")'

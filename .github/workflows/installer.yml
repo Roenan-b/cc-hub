@@ -1,0 +1,53 @@
+name: Installer
+
+# Runs the real one-command setup on a clean runner, starts the hub, and checks
+# it answers. Runs on changes to install paths and weekly to catch upstream drift
+# (apt repos, the Claude Code installer, Node packages).
+on:
+  pull_request:
+    paths:
+      - install.sh
+      - scripts/**
+      - db/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/installer.yml
+  schedule:
+    - cron: '7 12 * * 3'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: setup.sh (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run setup unattended
+        env:
+          CCHUB_NONINTERACTIVE: '1'
+          CCHUB_ROOTS: ${{ runner.temp }}/projects
+          CCHUB_VAULT: ${{ runner.temp }}/Vault
+        run: |
+          mkdir -p "$CCHUB_ROOTS"
+          ./scripts/setup.sh
+      - name: Start the hub and check health
+        run: |
+          # No Claude login on CI, so don't start the lead agent.
+          sed -i 's/^HUB_AUTOSTART_ORCHESTRATOR=.*/HUB_AUTOSTART_ORCHESTRATOR=0/' .env
+          ./scripts/start.sh
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8787/healthz && exit 0
+            sleep 2
+          done
+          echo "::error::hub did not become healthy"
+          tmux capture-pane -pt cchub-server 2>/dev/null | tail -50 || true
+          exit 1
+      - name: Stop
+        if: always()
+        run: ./scripts/stop.sh --all || true
