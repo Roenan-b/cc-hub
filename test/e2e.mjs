@@ -334,8 +334,14 @@ try {
   });
 
   await step('permission prompt relayed to UI and verdict returned', async () => {
+    await api('/api/sessions/eng1/messages', { method: 'POST', body: { text: 'PERM_BAD' } });
     await api('/api/sessions/eng1/messages', { method: 'POST', body: { text: 'PERM' } });
     await until(async () => (await thread('eng1')).find((m) => m.kind === 'permission_request'), 'permission request');
+    const perms = (await thread('eng1')).filter((m) => m.kind === 'permission_request');
+    assert.ok(
+      perms.every((m) => m.meta?.request_id === 'abcde'),
+      'a permission request with a malformed id must be dropped',
+    );
     const r = await api('/api/permissions/eng1/abcde', { method: 'POST', body: { behavior: 'allow' } });
     assert.equal(r.status, 200);
     await until(

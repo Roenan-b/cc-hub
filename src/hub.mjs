@@ -16,6 +16,9 @@ import * as tmux from './tmux.mjs';
 import * as vault from './vault.mjs';
 import * as watchdog from './watchdog.mjs';
 
+// Claude Code permission request ids: five lowercase letters, no 'l'.
+const PERMISSION_ID_RE = /^[a-km-z]{5}$/;
+
 assertHubConfig();
 
 // ---------------------------------------------------------------- agent RPC
@@ -228,6 +231,12 @@ agentWss.on('connection', (ws) => {
           ws.send(JSON.stringify({ type: 'rpc_result', id: m.id, error: e.status ? e.message : 'internal error' }));
         }
       } else if (m.type === 'permission_request') {
+        // The id ends up in a URL path the admin's browser calls; accept only
+        // Claude Code's format, the same one the verdict route enforces.
+        if (!PERMISSION_ID_RE.test(String(m.request_id))) {
+          log(`agent ${actor.name}: rejected permission_request with malformed request_id`);
+          return;
+        }
         const req = {
           session: actor.name,
           request_id: String(m.request_id),
@@ -521,7 +530,7 @@ async function route(req, res) {
     }
   }
 
-  const pm = p.match(/^\/api\/permissions\/([a-z0-9][a-z0-9-]{0,31})\/([a-km-z]{5})$/);
+  const pm = p.match(/^\/api\/permissions\/([a-z0-9][a-z0-9-]{0,31})\/([a-km-z]{5})$/); // id: PERMISSION_ID_RE
   if (method === 'POST' && pm) {
     const [, name, requestId] = pm;
     const { behavior } = await readJson(req);

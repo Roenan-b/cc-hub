@@ -58,6 +58,11 @@ client.fallbackNotificationHandler = async (n) => {
       const { tool, args: a } = JSON.parse(text.slice(5));
       const r = await call(tool, a);
       await call('reply', { text: `RESULT ${tool} ${JSON.stringify(r)}` });
+    } else if (text === 'PERM_BAD') {
+      await client.notification({
+        method: 'notifications/claude/channel/permission_request',
+        params: { request_id: '../../sessions/x', tool_name: 'Bash', description: 'bad id', input_preview: '{}' },
+      });
     } else if (text === 'PERM') {
       await client.notification({
         method: 'notifications/claude/channel/permission_request',

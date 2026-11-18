@@ -815,14 +815,26 @@
       };
       const isAdmin = () => state.me?.level === 'admin';
 
+      // Tagged template that URL-encodes each interpolated value, so ids from
+      // agents or the server can never add path segments or a query string.
+      const apiPath = (strings, ...values) =>
+        strings.reduce(
+          (out, str, i) => out + str + (i < values.length ? encodeURIComponent(String(values[i])) : ''),
+          '',
+        );
+
       async function api(path, opts = {}) {
-        const res = await fetch(path, {
+        const url = new URL(path, location.origin);
+        if (url.origin !== location.origin || !url.pathname.startsWith('/api/')) {
+          throw new Error('refused a request outside /api/');
+        }
+        const res = await fetch(url, {
           ...opts,
           credentials: 'same-origin',
           headers: { ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
           body: opts.body ? JSON.stringify(opts.body) : undefined,
         });
-        if (res.status === 401 && path !== '/api/login') {
+        if (res.status === 401 && url.pathname !== '/api/login') {
           showLogin();
           throw new Error('login required');
         }
@@ -1117,7 +1129,7 @@
         $('#curName').textContent = p ? p.title : slug;
         $('#curInfo').textContent = p ? `${p.status} · ${p.goal || ''}` : '';
         show('board');
-        state.tasks = await api(`/api/projects/${slug}/tasks`);
+        state.tasks = await api(apiPath`/api/projects/${slug}/tasks`);
         renderBoard();
       }
       function renderBoard() {
@@ -1163,7 +1175,7 @@
           v.append(el('div', { class: 'empty' }, 'No tasks yet. The lead creates them after you approve the plan.'));
       }
       async function openTask(id) {
-        const t = await api(`/api/tasks/${id}`);
+        const t = await api(apiPath`/api/tasks/${id}`);
         $('#taskTitle').textContent = `#${t.id} ${t.title}`;
         const b = $('#taskBody');
         b.textContent = '';
@@ -1203,7 +1215,7 @@
           const body = { status: $('#taskStatus').value };
           if (sel.value && sel.value !== t.assignee) body.assignee = sel.value;
           try {
-            await api(`/api/tasks/${t.id}`, { method: 'PATCH', body });
+            await api(apiPath`/api/tasks/${t.id}`, { method: 'PATCH', body });
             $('#taskDlg').close();
           } catch (e) {
             alert(e.message);
@@ -1254,7 +1266,7 @@
                   onclick: async (e) => {
                     actions.querySelectorAll('button').forEach((x) => (x.disabled = true));
                     try {
-                      await api(`/api/permissions/${m.sender}/${meta.request_id}`, {
+                      await api(apiPath`/api/permissions/${m.sender}/${meta.request_id}`, {
                         method: 'POST',
                         body: { behavior },
                       });
@@ -1288,7 +1300,7 @@
           const decide = async (decision) => {
             actions.querySelectorAll('button').forEach((x) => (x.disabled = true));
             try {
-              await api(`/api/approvals/${meta.approval_id}`, {
+              await api(apiPath`/api/approvals/${meta.approval_id}`, {
                 method: 'POST',
                 body: { decision, response: note.value },
               });
@@ -1328,7 +1340,7 @@
         $('#curName').textContent = name;
         show('chat');
         if (!state.dash) state.dash = await api('/api/dashboard').catch(() => null);
-        state.messages.set(name, await api(`/api/sessions/${name}/messages`));
+        state.messages.set(name, await api(apiPath`/api/sessions/${name}/messages`));
         renderThread();
       }
       $('#composer').onsubmit = async (e) => {
@@ -1337,7 +1349,7 @@
         if (!text || !state.current) return;
         $('#sendBtn').disabled = true;
         try {
-          await api(`/api/sessions/${state.current}/messages`, { method: 'POST', body: { text } });
+          await api(apiPath`/api/sessions/${state.current}/messages`, { method: 'POST', body: { text } });
           $('#input').value = '';
           autosize();
         } catch (err) {
@@ -1430,7 +1442,7 @@
         }
       };
       async function refreshPane() {
-        const { pane } = await api(`/api/sessions/${state.current}/pane`);
+        const { pane } = await api(apiPath`/api/sessions/${state.current}/pane`);
         $('#pane').textContent = pane || '(empty or not running)';
         $('#pane').scrollTop = $('#pane').scrollHeight;
       }
@@ -1445,9 +1457,10 @@
               {
                 class: 'small',
                 onclick: async () => {
-                  await api(`/api/sessions/${state.current}/keys`, { method: 'POST', body: { keys: [key] } }).catch(
-                    (e) => alert(e.message),
-                  );
+                  await api(apiPath`/api/sessions/${state.current}/keys`, {
+                    method: 'POST',
+                    body: { keys: [key] },
+                  }).catch((e) => alert(e.message));
                   setTimeout(refreshPane, 400);
                 },
               },
@@ -1465,7 +1478,7 @@
       };
       $('#restartBtn').onclick = async () => {
         if (confirm(`Restart ${state.current}? Its context is cleared; history stays searchable.`)) {
-          await api(`/api/sessions/${state.current}/restart`, { method: 'POST', body: {} }).catch((e) =>
+          await api(apiPath`/api/sessions/${state.current}/restart`, { method: 'POST', body: {} }).catch((e) =>
             alert(e.message),
           );
           $('#moreDlg').close();
@@ -1473,13 +1486,15 @@
       };
       $('#stopBtn').onclick = async () => {
         if (confirm(`Stop ${state.current}?`)) {
-          await api(`/api/sessions/${state.current}`, { method: 'DELETE' }).catch((e) => alert(e.message));
+          await api(apiPath`/api/sessions/${state.current}`, { method: 'DELETE' }).catch((e) => alert(e.message));
           $('#moreDlg').close();
         }
       };
       $('#forgetBtn').onclick = async () => {
         if (confirm(`Stop and remove ${state.current}? Messages stay in the database.`)) {
-          await api(`/api/sessions/${state.current}?forget=1`, { method: 'DELETE' }).catch((e) => alert(e.message));
+          await api(apiPath`/api/sessions/${state.current}?forget=1`, { method: 'DELETE' }).catch((e) =>
+            alert(e.message),
+          );
           $('#moreDlg').close();
           openDash();
         }
@@ -1563,7 +1578,7 @@
             refreshProjects();
             refreshDashSoon();
             if (state.view === 'board' && e.task.project === state.project) {
-              state.tasks = await api(`/api/projects/${state.project}/tasks`);
+              state.tasks = await api(apiPath`/api/projects/${state.project}/tasks`);
               renderBoard();
             }
           } else if (e.type === 'message') {
