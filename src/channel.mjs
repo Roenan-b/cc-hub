@@ -39,6 +39,8 @@ Inbound messages arrive as <channel source="hub" from="..." msg_id="...">text</c
 
 The human cannot see this terminal. Use reply for anything they should read: short and phone-readable. Use send_message to coordinate with teammates; only message a peer when you need something or are delivering a result. Never echo or acknowledge-loop.
 
+The human watches a live view of the project: use share_progress for short "what I'm doing now" lines (the lead also records its planned team with plan_team).
+
 Memory: the task board (task_*) is the source of truth for who does what. The Obsidian vault holds curated knowledge (see Conventions.md there). search_history / read_history search the full raw message log in Postgres; use them before asking anyone to repeat something.`.trim();
 
 // ---------------------------------------------------------------- MCP server
@@ -108,6 +110,19 @@ COMMON_TOOLS.push(
     inputSchema: { type: 'object', properties: { title: str('Short title'), body: str('What you want to do and why; phone-readable, include the key trade-offs') }, required: ['title', 'body'] },
   },
   {
+    name: 'share_progress',
+    description: 'Post one short line to the human\'s live project view: what you are working out or doing right now. Lead: use it at each planning step (understanding the problem, choosing experts, key decisions). Workers: use it when you start or finish a meaningful step. Not for chat; it does not notify anyone.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: str('One or two sentences, max 1000 chars'),
+        phase: { type: 'string', enum: ['understand', 'plan', 'approve', 'staff', 'build', 'review', 'report'], description: 'Which stage of the project this belongs to' },
+        project: str(`Project slug${PROJECT ? ` (default ${PROJECT})` : ' (default: the only open project)'}`),
+      },
+      required: ['text'],
+    },
+  },
+  {
     name: 'project_list',
     description: 'List projects with status and task counts.',
     inputSchema: { type: 'object', properties: {} },
@@ -165,6 +180,7 @@ const ORCH_TOOLS = [
       properties: {
         slug: str('lowercase-hyphenated, max 40 chars'), title: str('Human-readable title'), goal: str('Goal / definition of done'),
         repos: { type: 'array', items: { type: 'string' }, description: 'Absolute paths of git repos involved' },
+        dir: str('Existing folder to use as the project folder (import). Omit to create a new folder for the project.'),
       },
       required: ['slug', 'title'],
     },
@@ -175,6 +191,33 @@ const ORCH_TOOLS = [
     inputSchema: { type: 'object', properties: { slug: str('Project slug'), status: str('planning | active | paused | done'), goal: str('Goal'), title: str('Title') }, required: ['slug'] },
   },
   {
+    name: 'plan_team',
+    description: 'Record the team of experts you decided this project needs, before spawning them. The human sees it live as planned slots that fill in as you spawn each expert with spawn_session(expert_key=...).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: str(`Project slug${PROJECT ? ` (default ${PROJECT})` : ''}`),
+        rationale: str('Why this team: what the problem needs and why each discipline is there'),
+        experts: {
+          type: 'array',
+          description: 'One entry per expert agent',
+          items: {
+            type: 'object',
+            properties: {
+              key: str('Short id, lowercase-hyphenated, e.g. "db-security"'),
+              title: str('Discipline, e.g. "Postgres security engineer"'),
+              template: { type: 'string', enum: ['researcher', 'engineer', 'reviewer', 'writer', 'general'] },
+              expertise: str('What this expert knows and how they should work; becomes part of their system prompt'),
+              why: str('Why the project needs this expert'),
+            },
+            required: ['key', 'title', 'template'],
+          },
+        },
+      },
+      required: ['experts'],
+    },
+  },
+  {
     name: 'spawn_session',
     description: 'Start a worker Claude Code session. Give it a template (role), a project, and either a cwd or repo+branch (creates an isolated git worktree). The prompt is its first message.',
     inputSchema: {
@@ -183,10 +226,13 @@ const ORCH_TOOLS = [
         name: str('Lowercase name, letters/digits/hyphens, max 32 chars, e.g. "mzt-eng-geofence"'),
         template: { type: 'string', enum: ['researcher', 'engineer', 'reviewer', 'writer', 'general'], description: 'Role brief loaded into its system prompt' },
         project: str(`Project slug${PROJECT ? ` (default ${PROJECT})` : ''}`),
-        cwd: str('Working directory (absolute, under an allowed root). Omit when using repo+branch.'),
+        cwd: str('Working directory (absolute, under an allowed root). Omit to use the project folder, or when using repo+branch.'),
         repo: str('Git repo to create a worktree from'),
         branch: str('Branch for the worktree (created from HEAD if new)'),
         prompt: str('First message: usually "Your task is #<id>. Start with task_get."'),
+        expert_key: str('Key of the planned expert this session fills (from plan_team)'),
+        expert_title: str('Discipline shown in the UI (defaults to the planned title)'),
+        expertise: str('Expert role: what this agent specializes in; appended to its system prompt'),
         permission_mode: { type: 'string', enum: ['default', 'acceptEdits', 'plan'], description: 'Claude Code permission mode (default: default)' },
       },
       required: ['name', 'template', 'prompt'],
@@ -212,6 +258,7 @@ const TOOL_TO_RPC = {
   task_list: 'task_list', task_get: 'task_get', task_create: 'task_create', task_update: 'task_update',
   project_create: 'project_create', project_update: 'project_update', spawn_session: 'spawn',
   stop_session: 'stop', restart_session: 'restart', peek_session: 'peek', send_keys: 'keys',
+  share_progress: 'share_progress', plan_team: 'plan_team',
 };
 
 mcp.setRequestHandler(ListToolsRequestSchema, async () => ({

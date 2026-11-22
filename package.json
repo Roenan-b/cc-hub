@@ -11,7 +11,8 @@
     "start": "node src/hub.mjs",
     "hub": "node src/hub.mjs",
     "db:init": "node src/db.mjs --init",
-    "test": "node test/e2e.mjs",
+    "test": "node test/unit.mjs && node test/e2e.mjs",
+    "test:unit": "node test/unit.mjs",
     "check": "for f in src/*.mjs test/*.mjs; do node --check $f || exit 1; done"
   },
   "dependencies": {

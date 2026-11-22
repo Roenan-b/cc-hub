@@ -11,7 +11,9 @@ import { config, assertHubConfig, ROOT } from './config.mjs';
 import * as core from './core.mjs';
 import { HttpError, log, safeEqual, sha256 } from './core.mjs';
 import * as db from './db.mjs';
+import { redactEvent } from './events.mjs';
 import * as git from './git.mjs';
+import { listFiles } from './projectfs.mjs';
 import * as tmux from './tmux.mjs';
 import * as vault from './vault.mjs';
 import * as watchdog from './watchdog.mjs';
@@ -21,7 +23,14 @@ assertHubConfig();
 // ---------------------------------------------------------------- agent RPC
 // Every method runs with the caller's identity from the DB (role, template),
 // never with anything the channel process claims.
-const LEAD_ONLY = new Set(['spawn', 'stop', 'restart', 'peek', 'keys', 'project_create', 'project_update']);
+const LEAD_ONLY = new Set(['spawn', 'stop', 'restart', 'peek', 'keys', 'project_create', 'project_update', 'plan_team']);
+// Read-only hub tools get a 'tool' event so the live view shows what an agent
+// is looking at; the others already emit richer events of their own.
+const RPC_ACTIVITY = {
+  list_sessions: 'listed the team', search: 'searched the history', history: 'read the history',
+  project_list: 'listed projects', task_list: 'checked the task board', task_get: 'read a task',
+  peek: 'looked at a terminal', keys: 'pressed keys in a terminal',
+};
 const pick = (m) => ({ id: m.id, ts: m.ts, sender: m.sender, recipient: m.recipient, kind: m.kind, body: m.body });
 
 function checkKeys(keys) {
@@ -51,6 +60,13 @@ async function handleAgentRpc(actor, method, p = {}) {
   }
   core.flags.set(actor.name, { ...(core.flags.get(actor.name) || {}), stalled: false });
   db.touchActivity(actor.name).catch(() => {});
+  if (RPC_ACTIVITY[method]) {
+    const target = method === 'task_get' ? ` #${Number(p.id) || '?'}` : ['peek', 'keys'].includes(method) && typeof p.name === 'string' ? ` of ${p.name.slice(0, 32)}` : '';
+    core.recordEvent({
+      project: actor.project || null, session: actor.name, kind: 'tool', summary: `${actor.name} ${RPC_ACTIVITY[method]}${target}`,
+      text: method === 'search' ? String(p.query || '').slice(0, 300) : '', detail: { tool: `hub:${method}`, source: 'hub' },
+    });
+  }
   switch (method) {
     case 'reply':
       return pick(await core.postMessage({ sender: actor.name, recipient: 'user', body: p.text }));
@@ -72,11 +88,15 @@ async function handleAgentRpc(actor, method, p = {}) {
       return (await db.threadFor(p.session || actor.name, { limit: Math.min(p.limit || 30, 200), beforeId: p.before_id || null })).map(pick);
     case 'request_approval':
       return core.requestApproval({ session: actor.name, title: p.title, body: p.body });
+    case 'share_progress':
+      return core.shareProgress(actor, { text: p.text, phase: p.phase, project: await defaultProject(p.project, actor, { required: false }) });
+    case 'plan_team':
+      return core.planTeam(actor, { project: await defaultProject(p.project, actor), rationale: p.rationale || '', experts: p.experts });
 
     // projects
     case 'project_list': return db.listProjects();
     case 'project_create':
-      return core.createProject({ slug: p.slug, title: p.title, goal: p.goal || '', repos: p.repos || [], createdBy: actor.name });
+      return core.createProject({ slug: p.slug, title: p.title, goal: p.goal || '', repos: p.repos || [], dir: p.dir || null, createdBy: actor.name });
     case 'project_update': {
       if (p.status && !['planning', 'active', 'paused', 'done'].includes(p.status)) throw new HttpError(400, 'bad status');
       const r = await db.updateProject(p.slug, { status: p.status, goal: p.goal, title: p.title });
@@ -109,6 +129,7 @@ async function handleAgentRpc(actor, method, p = {}) {
         project: await defaultProject(p.project, actor, { required: false }),
         repo: p.repo || null, branch: p.branch || null,
         permissionMode: p.permission_mode || 'default', prompt: p.prompt || '', createdBy: actor.name,
+        expertise: p.expertise || '', expertKey: p.expert_key || null, expertTitle: p.expert_title || null,
       });
     case 'stop': {
       const target = await db.getSession(p.name);
@@ -159,6 +180,7 @@ agentWss.on('connection', (ws) => {
       await db.setStatus(actor.name, 'online');
       ws.send(JSON.stringify({ type: 'welcome', name: actor.name, role: actor.role }));
       log(`agent online: ${actor.name} (${actor.role}/${actor.template})`);
+      core.recordEvent({ project: actor.project, session: actor.name, kind: 'status', summary: `${actor.name} is online`, detail: { status: 'online' } });
       for (const msg of await db.undeliveredFor(actor.name)) core.deliver(actor.name, msg);
       return core.broadcastSessions();
     }
@@ -203,6 +225,7 @@ agentWss.on('connection', (ws) => {
       const alive = await tmux.hasSession(actor.name);
       await db.setStatus(actor.name, alive ? 'offline' : 'stopped').catch(() => {});
       log(`agent disconnected: ${actor.name}`);
+      core.recordEvent({ session: actor.name, kind: 'status', summary: `${actor.name} went ${alive ? 'offline' : 'away (stopped)'}`, detail: { status: alive ? 'offline' : 'stopped' } });
       core.broadcastSessions().catch(() => {});
     }
   });
@@ -322,7 +345,7 @@ async function route(req, res) {
     return send(res, 200, {
       level, can_read_messages: canReadMessages, roots: config.workspaceRoots, vault: config.vault,
       permission_modes: [...core.PERMISSION_MODES], keys: [...tmux.ALLOWED_KEYS], templates: core.templates(),
-      max_workers: config.maxWorkers,
+      max_workers: config.maxWorkers, projects_dir: admin ? config.projectsDir : undefined, activity_hooks: config.activityHooks,
     });
   }
   if (method === 'GET' && p === '/api/dashboard') {
@@ -337,9 +360,27 @@ async function route(req, res) {
     });
   }
   if (method === 'GET' && p === '/api/sessions') return send(res, 200, await core.sessionsView());
-  if (method === 'GET' && p === '/api/projects') return send(res, 200, await db.listProjects());
+  // Observers do not need to know where folders live on disk.
+  const hideDir = (x) => (admin ? x : { ...x, dir: undefined, cwd: undefined, vault_dir: undefined });
+  if (method === 'GET' && p === '/api/projects') return send(res, 200, (await db.listProjects()).map(hideDir));
   const tp = p.match(/^\/api\/projects\/([a-z0-9][a-z0-9-]{0,39})\/tasks$/);
   if (method === 'GET' && tp) return send(res, 200, await db.listTasks({ project: tp[1] }));
+  const pv = p.match(/^\/api\/projects\/([a-z0-9][a-z0-9-]{0,39})(\/events|\/files)?$/);
+  const eventsOut = (rows) => (canReadMessages ? rows : rows.map(redactEvent));
+  const intParam = (k) => { const v = url.searchParams.get(k); if (v === null || v === '') return null; return asId(v); };
+  if (method === 'GET' && pv && !pv[2]) {
+    const v = await core.projectView(pv[1]);
+    const plan = v.team_plan && (canReadMessages ? v.team_plan : redactEvent(v.team_plan));
+    return send(res, 200, { ...v, project: hideDir(v.project), sessions: v.sessions.map(hideDir), team_plan: plan });
+  }
+  if (method === 'GET' && pv && pv[2] === '/events') {
+    if (!(await db.getProject(pv[1]))) throw new HttpError(404, 'no such project');
+    const rows = await db.listEvents({ project: pv[1], afterId: intParam('after'), beforeId: intParam('before'), limit: intParam('limit') || 200 });
+    return send(res, 200, eventsOut(rows));
+  }
+  if (method === 'GET' && p === '/api/events') {
+    return send(res, 200, eventsOut(await db.listEvents({ afterId: intParam('after'), beforeId: intParam('before'), limit: intParam('limit') || 200 })));
+  }
   const tg = p.match(/^\/api\/tasks\/(\d+)$/);
   if (method === 'GET' && tg) {
     const t = await db.getTask(Number(tg[1]));
@@ -372,7 +413,13 @@ async function route(req, res) {
   }
   if (method === 'POST' && p === '/api/projects') {
     const b = await readJson(req);
-    return send(res, 201, await core.createProject({ slug: b.slug, title: b.title, goal: b.goal || '', repos: b.repos || [], createdBy: 'user' }));
+    return send(res, 201, await core.createProject({ slug: b.slug, title: b.title, goal: b.goal || '', repos: b.repos || [], dir: b.dir || null, createdBy: 'user' }));
+  }
+  if (method === 'GET' && pv && pv[2] === '/files') {
+    const proj = await db.getProject(pv[1]);
+    if (!proj) throw new HttpError(404, 'no such project');
+    if (!proj.dir) return send(res, 200, { dir: null, missing: true, entries: [], truncated: false });
+    return send(res, 200, { dir: proj.dir, ...(await listFiles(proj.dir)) });
   }
   if (method === 'PATCH' && tg) {
     return send(res, 200, await core.updateTask(Number(tg[1]), await readJson(req), { name: 'user', role: 'user' }));
@@ -388,6 +435,11 @@ async function route(req, res) {
     if (method === 'POST' && sub === '/messages') {
       const { text } = await readJson(req);
       return send(res, 201, await core.postMessage({ sender: 'user', recipient: name, body: text }));
+    }
+    if (method === 'PATCH' && sub === '') {
+      const b = await readJson(req);
+      if (!('project' in b) || (b.project !== null && typeof b.project !== 'string')) throw new HttpError(400, 'project (slug or null) is required');
+      return send(res, 200, await core.fileSession(name, b.project || null));
     }
     if (method === 'GET' && sub === '/pane') return send(res, 200, { pane: (await tmux.capturePane(name, 300)).trimEnd() });
     if (method === 'POST' && sub === '/keys') {
@@ -503,6 +555,7 @@ async function resumeAfterDowntime({ interrupted, lastSeen }) {
 async function main() {
   await db.initSchema();
   fs.mkdirSync(config.worktreeDir, { recursive: true });
+  await core.ensureProjectFolders();
   vault.initVault(config.vault);
   await git.ensureVaultRepo(config.vault).catch((e) => log(`vault git init failed: ${e.message}`));
   const downtime = await findInterrupted();
@@ -513,6 +566,12 @@ async function main() {
     for (const [k, v] of core.pendingPerms) if (Date.parse(v.ts) < cutoff) core.pendingPerms.delete(k);
   }, 60_000);
   watchdog.start();
+  let draining = false;
+  setInterval(async () => {
+    if (draining) return;
+    draining = true;
+    try { await core.drainActivity(); } catch (e) { log(`activity: ${e.message}`); } finally { draining = false; }
+  }, Math.max(0.5, config.activityPollSec) * 1000);
 
   await new Promise((r) => server.listen(config.port, config.host, r));
   log(`cc-hub listening on http://${config.host}:${config.port} (vault: ${config.vault})`);

@@ -58,6 +58,10 @@ async function scanPanes() {
     const idleMin = s.last_activity ? (Date.now() - new Date(s.last_activity).getTime()) / 60_000 : 0;
     f.stalled = idleMin >= config.stallMin;
     f.idle_min = Math.round(idleMin);
+    const prev = core.flags.get(s.name) || {};
+    for (const [k, label] of [['usage_limit', 'hit a usage limit'], ['waiting_dialog', 'is waiting on a dialog'], ['stalled', `has been idle for ${f.idle_min} min`]]) {
+      if (f[k] && !prev[k]) core.recordEvent({ project: s.project, session: s.name, kind: 'status', summary: `${s.name} ${label}`, detail: { status: k } });
+    }
     core.flags.set(s.name, f);
 
     if (f.usage_limit && Date.now() - (lastLimitNotice.get(s.name) || 0) > 60 * 60_000) {
@@ -150,11 +154,21 @@ async function commitVault() {
   } catch (e) { core.log(`vault commit/sync failed: ${e.message}`); }
 }
 
+let lastPrune = 0;
+async function pruneEvents() {
+  if (config.eventRetentionDays <= 0 || Date.now() - lastPrune < 6 * 60 * 60_000) return;
+  lastPrune = Date.now();
+  const n = await db.pruneToolEvents(config.eventRetentionDays);
+  if (n) core.log(`pruned ${n} tool events older than ${config.eventRetentionDays} days`);
+}
+
 export function start() {
   const safe = (fn) => () => fn().catch((e) => core.log(`watchdog ${fn.name}: ${e.message}`));
   setInterval(safe(scanPanes), Math.max(1, config.scanSec) * 1000);
   setInterval(safe(heartbeat), Math.max(0.05, config.heartbeatMin) * 60_000);
   setInterval(safe(digest), 5 * 60_000);
+  setInterval(safe(pruneEvents), 10 * 60_000);
+  safe(pruneEvents)();
   if (config.vaultAutocommitMin > 0) setInterval(safe(commitVault), Math.max(0.05, config.vaultAutocommitMin) * 60_000);
   return { scanPanes, heartbeat, boardSummary, commitVault };
 }

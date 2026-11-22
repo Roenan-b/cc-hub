@@ -7,8 +7,11 @@
 // Test protocol (message bodies sent to the session):
 //   CALL {"tool": "...", "args": {...}}  -> call the tool, reply "RESULT <tool> <json>"
 //   PERM                                 -> emit a permission request (id "abcde")
+//   TOOL <name> <json input>             -> run the PreToolUse hooks from --settings, as Claude Code
+//                                           does before a tool call, then the Stop hooks
 //   anything from user                   -> reply "echo: <text>"
 //   anything from a peer or the hub      -> no reply (avoids loops)
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -21,6 +24,18 @@ const { StdioClientTransport } = await req('@modelcontextprotocol/sdk/dist/esm/c
 
 const args = process.argv.slice(2);
 const flag = (f) => (args.includes(f) ? args[args.indexOf(f) + 1] : null);
+const settingsFile = flag('--settings');
+const settings = settingsFile ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')) : {};
+const addDirs = args.flatMap((a, i) => (a === '--add-dir' ? [args[i + 1]] : []));
+console.log(`HOOKS pre=${(settings.hooks?.PreToolUse || []).length} stop=${(settings.hooks?.Stop || []).length} deny=${(settings.permissions?.deny || []).length} add_dirs=${addDirs.join('|')} expert=${/# Your expert role/.test(flag('--append-system-prompt') || '')}`);
+function runHooks(event, payload) {
+  for (const group of settings.hooks?.[event] || []) {
+    for (const h of group.hooks || []) {
+      const r = spawnSync('/bin/sh', ['-c', h.command], { input: JSON.stringify({ hook_event_name: event, ...payload }), encoding: 'utf8', timeout: 10_000 });
+      console.log(`HOOK ${event} exit=${r.status} out=${JSON.stringify(r.stdout)}`);
+    }
+  }
+}
 console.log(`ARGV mcp=${!!flag('--mcp-config')} channels=${flag('--dangerously-load-development-channels')} append_prompt=${!!flag('--append-system-prompt')} add_dir=${flag('--add-dir')} settings=${!!flag('--settings')} profile=${(flag('--append-system-prompt') || '').includes('PROFILE-TEST-MARKER')} mode=${flag('--permission-mode') || 'default'}`);
 console.log('WARNING: Loading development channels\n\n  ❯ 1. I am using this for local development\n    2. Exit');
 await new Promise((r) => { const rl = readline.createInterface({ input: process.stdin }); rl.once('line', () => { rl.close(); r(); }); });
@@ -44,6 +59,10 @@ client.fallbackNotificationHandler = async (n) => {
       const { tool, args: a } = JSON.parse(text.slice(5));
       const r = await call(tool, a);
       await call('reply', { text: `RESULT ${tool} ${JSON.stringify(r)}` });
+    } else if (text.startsWith('TOOL ')) {
+      const [, name, ...rest] = text.split(' ');
+      runHooks('PreToolUse', { session_id: 'fake', cwd: process.cwd(), tool_name: name, tool_input: JSON.parse(rest.join(' ') || '{}') });
+      runHooks('Stop', { session_id: 'fake' });
     } else if (text === 'PERM') {
       await client.notification({ method: 'notifications/claude/channel/permission_request', params: { request_id: 'abcde', tool_name: 'Bash', description: 'List files', input_preview: '{"command":"ls"}' } });
     } else if (from === 'user') {

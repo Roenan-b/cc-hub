@@ -27,6 +27,8 @@ export const expandHome = (p) => (p.startsWith('~') ? path.join(os.homedir(), p.
 const env = process.env;
 const num = (v, d) => (v === undefined || v === '' ? d : Number(v));
 const stateDir = path.resolve(expandHome(env.HUB_STATE_DIR || '~/.cc-hub'));
+const workspaceRoots = (env.HUB_WORKSPACE_ROOTS || '~')
+  .split(':').filter(Boolean).map((p) => path.resolve(expandHome(p)));
 
 export const config = {
   host: env.HUB_HOST || '127.0.0.1',
@@ -39,8 +41,10 @@ export const config = {
   stateDir,
   worktreeDir: path.join(stateDir, 'worktrees'),
   // Sessions may only be started in directories under one of these roots.
-  workspaceRoots: (env.HUB_WORKSPACE_ROOTS || '~')
-    .split(':').filter(Boolean).map((p) => path.resolve(expandHome(p))),
+  workspaceRoots,
+  // Each project gets its own folder here (<dir>/<slug>) unless one is imported.
+  // Must be inside a workspace root so agents may work in it.
+  projectsDir: path.resolve(expandHome(env.HUB_PROJECTS_DIR || path.join(workspaceRoots[0] || '~', 'cc-projects'))),
   // Obsidian vault shared by every session (the curated "brain").
   vault: path.resolve(expandHome(env.HUB_VAULT || '~/Vault')),
   vaultAutocommitMin: num(env.HUB_VAULT_AUTOCOMMIT_MIN, 5),
@@ -65,6 +69,13 @@ export const config = {
   scanSec: num(env.HUB_SCAN_SEC, 60),
   digestHour: num(env.HUB_DIGEST_HOUR, 21), // local hour for the daily report; -1 disables
   trustProxy: env.HUB_TRUST_PROXY === '1',
+  // Live agent view: Claude Code hooks report each tool call to the hub (0 disables),
+  // how often the hub reads those reports, how long tool events are kept, and a
+  // per-session cap on progress posts.
+  activityHooks: env.HUB_ACTIVITY_HOOKS !== '0',
+  activityPollSec: num(env.HUB_ACTIVITY_POLL_SEC, 2),
+  eventRetentionDays: num(env.HUB_EVENT_RETENTION_DAYS, 30),
+  progressRateLimitPerMin: num(env.HUB_PROGRESS_RATE_LIMIT, 30),
 };
 
 export function assertHubConfig() {
@@ -73,5 +84,9 @@ export function assertHubConfig() {
   }
   if (config.observerToken && (config.observerToken.length < 24 || config.observerToken === config.uiToken)) {
     throw new Error('HUB_OBSERVER_TOKEN must be at least 24 characters and different from HUB_UI_TOKEN.');
+  }
+  const pd = config.projectsDir;
+  if (!config.workspaceRoots.some((r) => pd === r || pd.startsWith(r + path.sep))) {
+    throw new Error(`HUB_PROJECTS_DIR (${pd}) must be inside one of HUB_WORKSPACE_ROOTS (${config.workspaceRoots.join(', ')}).`);
   }
 }

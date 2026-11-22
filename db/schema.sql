@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- The project's own working folder on disk (absolute, resolved). Chats, agents
+-- and outputs are grouped under it. NULL only for projects created before
+-- folders existed; the hub backfills those on start.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS dir TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS projects_dir_idx ON projects (dir) WHERE dir IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS sessions (
   name            TEXT PRIMARY KEY CHECK (name ~ '^[a-z0-9][a-z0-9-]{0,31}$'),
@@ -30,6 +35,11 @@ ALTER TABLE sessions ADD COLUMN IF NOT EXISTS template      TEXT NOT NULL DEFAUL
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS project       TEXT;
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS worktree      JSONB;      -- {repo, branch, path}
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ;
+-- Expert role the lead gave this agent (free text, appended to its brief) and
+-- the key of the planned team slot it fills (see agent_events kind 'team_plan').
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expertise     TEXT NOT NULL DEFAULT '';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expert_key    TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expert_title  TEXT;
 
 CREATE TABLE IF NOT EXISTS messages (
   id           BIGSERIAL PRIMARY KEY,
@@ -95,3 +105,24 @@ CREATE TABLE IF NOT EXISTS approvals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   decided_at TIMESTAMPTZ
 );
+
+-- Live activity stream for the agent view: what the lead is thinking, the team
+-- it planned, agents starting and stopping, tool use, task and approval changes.
+--   summary: written by the hub from validated fields; safe for observers
+--   text:    free text written by an agent (thinking, tool input preview, message
+--            excerpt); redacted for observers unless HUB_OBSERVER_READ_MESSAGES=1
+--   detail:  structured metadata; detail->'private' is removed for observers
+CREATE TABLE IF NOT EXISTS agent_events (
+  id       BIGSERIAL PRIMARY KEY,
+  ts       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  project  TEXT,
+  session  TEXT NOT NULL,
+  kind     TEXT NOT NULL CHECK (kind IN (
+             'thinking', 'progress', 'team_plan', 'spawn', 'stop', 'status', 'tool',
+             'task', 'approval', 'message', 'project')),
+  summary  TEXT NOT NULL,
+  text     TEXT NOT NULL DEFAULT '',
+  detail   JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS agent_events_project_idx ON agent_events (project, id);
+CREATE INDEX IF NOT EXISTS agent_events_plan_idx ON agent_events (project, id DESC) WHERE kind = 'team_plan';
