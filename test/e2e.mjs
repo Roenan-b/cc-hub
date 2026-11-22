@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import WebSocket from 'ws';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB = process.env.TEST_DATABASE_URL;
@@ -66,6 +67,16 @@ async function api(p, { method = 'GET', body, token = ADMIN, origin } = {}) {
   return { status: res.status, data };
 }
 const thread = async (name) => (await api(`/api/sessions/${name}/messages`)).data;
+const events = async (project, token = ADMIN) => (await api(`/api/projects/${project}/events?limit=1000`, { token })).data;
+const real = (p) => fs.realpathSync(p);
+const projDir = (slug) => path.join(real(dirs.work), 'cc-projects', slug);
+/** Open a UI WebSocket and collect agent events. */
+function uiSocket(token) {
+  const got = [];
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws/ui`, { headers: { Authorization: `Bearer ${token}` } });
+  ws.on('message', (raw) => { const m = JSON.parse(raw.toString()); if (m.type === 'agent_event') got.push(m.event); });
+  return { got, ready: new Promise((r, j) => { ws.once('open', r); ws.once('error', j); }), close: () => ws.close() };
+}
 /** Send a CALL to a session and wait for its RESULT reply. */
 async function callAs(session, tool, args) {
   const before = (await thread(session)).length;
@@ -76,7 +87,7 @@ async function callAs(session, tool, args) {
   const res = JSON.parse(reply.body.slice(`RESULT ${tool} `.length));
   return { ...res, json: (() => { try { return JSON.parse(res.text); } catch { return null; } })() };
 }
-const pane = (name) => execFileSync('tmux', ['-L', SOCKET, 'capture-pane', '-p', '-t', `=cc-${name}:`, '-S', '-200']).toString();
+const pane = (name) => execFileSync('tmux', ['-L', SOCKET, 'capture-pane', '-p', '-J', '-t', `=cc-${name}:`, '-S', '-200']).toString();
 
 let passed = 0; let failed = 0;
 async function step(name, fn) {
@@ -113,6 +124,14 @@ try {
     assert.match(fs.readFileSync(path.join(dirs.vault, 'Home.md'), 'utf8'), /Projects\/demo\/demo/);
   });
 
+  await step('project gets its own working folder', async () => {
+    const p = (await api('/api/projects/demo')).data;
+    assert.equal(p.project.dir, projDir('demo'));
+    assert.ok(fs.statSync(projDir('demo')).isDirectory());
+    const ev = await events('demo');
+    assert.ok(ev.some((e) => e.kind === 'project' && e.session === 'orchestrator'), 'project event recorded');
+  });
+
   await step('plan approval round trip', async () => {
     const r = await callAs('orchestrator', 'request_approval', { title: 'Plan for demo', body: '3 milestones' });
     const id = r.json.approval_id;
@@ -136,6 +155,32 @@ try {
     assert.equal(tasks.find((t) => t.id === t2.id).deps_done, false);
   });
 
+  await step('lead shares its thinking and plans a team of experts', async () => {
+    const t = await callAs('orchestrator', 'share_progress', { text: 'The parser is the risky part; it needs a binary-format specialist.', phase: 'plan' });
+    assert.equal(t.isError, false, t.text);
+    const bad = await callAs('orchestrator', 'share_progress', { text: 'x', phase: 'dreaming' });
+    assert.equal(bad.isError, true);
+    const badPlan = await callAs('orchestrator', 'plan_team', { experts: [{ key: 'x', title: 'X', template: 'lead' }] });
+    assert.equal(badPlan.isError, true);
+    assert.match(badPlan.text, /template must be one of/);
+    const r = await callAs('orchestrator', 'plan_team', {
+      rationale: 'Two disciplines: parsing and independent review.',
+      experts: [
+        { key: 'parser-eng', title: 'Binary parser engineer', template: 'engineer', expertise: 'EXPERTISE-MARKER: ELF and PE formats', why: 'core risk' },
+        { key: 'verifier', title: 'Test and review specialist', template: 'reviewer', expertise: 'adversarial testing', why: 'independent check' },
+      ],
+    });
+    assert.equal(r.isError, false, r.text);
+    assert.deepEqual(r.json.planned, ['parser-eng', 'verifier']);
+    const v = (await api('/api/projects/demo')).data;
+    assert.deepEqual(v.team_plan.detail.experts.map((x) => x.title), ['Binary parser engineer', 'Test and review specialist']);
+    assert.equal(v.team_plan.detail.private.experts[0].expertise, 'EXPERTISE-MARKER: ELF and PE formats');
+    const ev = await events('demo');
+    const thinking = ev.find((e) => e.kind === 'thinking');
+    assert.equal(thinking.detail.phase, 'plan');
+    assert.match(thinking.text, /binary-format specialist/);
+  });
+
   await step('human profile from the vault reaches new sessions', async () => {
     fs.mkdirSync(path.join(dirs.vault, 'Me'), { recursive: true });
     fs.writeFileSync(path.join(dirs.vault, 'Me', 'Working with me.md'), '---\ntype: x\n---\n# Working with me\nPROFILE-TEST-MARKER: never use em dashes.\n');
@@ -145,6 +190,7 @@ try {
   await step('lead spawns an engineer in an isolated git worktree', async () => {
     const r = await callAs('orchestrator', 'spawn_session', {
       name: 'eng1', template: 'engineer', repo, branch: 'feature/parser', prompt: `Your task is #${t1.id}.`,
+      expert_key: 'parser-eng', expertise: 'EXPERTISE-MARKER: ELF and PE formats',
     });
     assert.equal(r.isError, false, r.text);
     assert.equal(r.json.worktree.branch, 'feature/parser');
@@ -152,9 +198,19 @@ try {
     assert.ok(fs.existsSync(path.join(dirs.state, 'worktrees', 'eng1', 'README.md')));
     assert.match(execFileSync('git', ['-C', path.join(dirs.state, 'worktrees', 'eng1'), 'branch', '--show-current']).toString(), /feature\/parser/);
     const p = pane('eng1');
-    assert.match(p, /TOOLS reply,send_message,list_sessions,search_history,read_history,request_approval,project_list,task_list,task_get,task_create,task_update\n/);
+    assert.match(p, /TOOLS reply,send_message,list_sessions,search_history,read_history,request_approval,share_progress,project_list,task_list,task_get,task_create,task_update\n/);
     assert.match(p, /from":"orchestrator"/); // first prompt delivered after connect
     assert.match(p, /profile=true/, 'operating profile appended to system prompt');
+    assert.match(p, /HOOKS pre=1 stop=1 deny=\d+ /, 'activity hooks merged with the worker preset');
+    assert.doesNotMatch(p, /deny=0 /);
+    assert.match(p, /expert=true/, 'expert role in system prompt');
+    assert.ok(p.includes(projDir('demo')), 'project folder added with --add-dir for a worktree session');
+    assert.match(fs.readFileSync(path.join(dirs.state, 'run', 'eng1.prompt.md'), 'utf8'), /EXPERTISE-MARKER/);
+    const s = (await api('/api/sessions')).data.find((x) => x.name === 'eng1');
+    assert.equal(s.expert_key, 'parser-eng');
+    assert.equal(s.expert_title, 'Binary parser engineer', 'title filled from the team plan');
+    const spawnEv = (await events('demo')).find((e) => e.kind === 'spawn' && e.session === 'eng1');
+    assert.match(spawnEv.summary, /orchestrator started eng1 as Binary parser engineer \(engineer\)/);
   });
 
   await step('assignment notifies the worker', async () => {
@@ -190,8 +246,14 @@ try {
     assert.ok(events.length >= 4, 'audit trail recorded');
   });
 
+  await step('a project session with no folder given works in the project folder', async () => {
+    const r = await callAs('orchestrator', 'spawn_session', { name: 'w3', template: 'general', prompt: 'x' });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.cwd, projDir('demo'));
+    assert.equal(r.json.project, 'demo');
+  });
+
   await step('worker limit is enforced', async () => {
-    await callAs('orchestrator', 'spawn_session', { name: 'w3', template: 'general', cwd: dirs.work, prompt: 'x' });
     const r = await callAs('orchestrator', 'spawn_session', { name: 'w4', template: 'general', cwd: dirs.work, prompt: 'x' });
     assert.equal(r.isError, true);
     assert.match(r.text, /worker limit/);
@@ -206,6 +268,80 @@ try {
   await step('peer messages flow between sessions', async () => {
     await callAs('orchestrator', 'send_message', { to: 'eng1', text: 'please rebase' });
     await until(async () => (await thread('eng1')).find((m) => m.sender === 'orchestrator' && m.body === 'please rebase' && m.delivered_at), 'peer delivery');
+  });
+
+  await step('tool calls reach the live view through hooks, with secrets masked', async () => {
+    await api('/api/sessions/eng1/messages', { method: 'POST', body: { text: 'TOOL Bash {"command":"npm test -- --api_key=hunter2hunter2 && echo done"}' } });
+    const ev = await until(async () => (await events('demo')).find((e) => e.kind === 'tool' && e.session === 'eng1' && e.detail.tool === 'Bash'), 'tool event');
+    assert.match(ev.text, /^npm test -- --api_key=\*\*\* && echo done$/);
+    assert.equal(ev.detail.source, 'hook');
+    await until(async () => (await events('demo')).find((e) => e.kind === 'status' && e.session === 'eng1' && e.detail.status === 'idle'), 'idle event');
+    await until(() => /HOOK PreToolUse exit=0 out=""\n/.test(pane('eng1')), 'hook printed nothing and exited 0');
+    // Hub-side tools are reported too.
+    await callAs('eng1', 'task_list', {});
+    await until(async () => (await events('demo')).find((e) => e.kind === 'tool' && e.session === 'eng1' && e.detail.tool === 'hub:task_list'), 'hub tool event');
+  });
+
+  await step('UI websocket streams live events; observers get them redacted', async () => {
+    const admin = uiSocket(ADMIN); const obs = uiSocket(OBSERVER);
+    await Promise.all([admin.ready, obs.ready]);
+    await callAs('orchestrator', 'share_progress', { text: 'WS-MARKER choosing reviewers', phase: 'staff', project: 'demo' });
+    const a = await until(() => admin.got.find((e) => e.text === 'WS-MARKER choosing reviewers'), 'admin event');
+    const o = await until(() => obs.got.find((e) => e.id === a.id), 'observer event');
+    assert.equal(o.text, '[28 chars]');
+    assert.equal(o.summary, a.summary);
+    const ov = (await api('/api/projects/demo', { token: OBSERVER })).data;
+    assert.equal(ov.team_plan.detail.private, undefined);
+    assert.equal(ov.team_plan.detail.experts.length, 2);
+    assert.equal(ov.project.dir, undefined, 'observers do not see folder paths');
+    const oe = await events('demo', OBSERVER);
+    assert.ok(oe.every((e) => !e.text || /^\[\d+ chars\]$/.test(e.text)), 'event text redacted');
+    admin.close(); obs.close();
+  });
+
+  await step('chats can be filed under a project and back out', async () => {
+    let r = await api('/api/sessions/rev1', { method: 'PATCH', body: { project: null } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.ok(!(await api('/api/projects/demo')).data.sessions.some((s) => s.name === 'rev1'));
+    r = await api('/api/sessions/rev1', { method: 'PATCH', body: { project: 'demo' } });
+    assert.equal(r.status, 200);
+    assert.ok((await api('/api/projects/demo')).data.sessions.some((s) => s.name === 'rev1'));
+    assert.equal((await api('/api/sessions/rev1', { method: 'PATCH', body: { project: 'nope' } })).status, 404);
+    assert.equal((await api('/api/sessions/orchestrator', { method: 'PATCH', body: { project: 'demo' } })).status, 400);
+    assert.equal((await api('/api/sessions/rev1', { method: 'PATCH', body: { project: null }, token: OBSERVER })).status, 403);
+  });
+
+  await step('files tab lists the project folder and never follows links out', async () => {
+    fs.mkdirSync(path.join(projDir('demo'), 'out'), { recursive: true });
+    fs.writeFileSync(path.join(projDir('demo'), 'out', 'report.md'), '# r\n');
+    fs.mkdirSync(path.join(projDir('demo'), 'node_modules', 'x'), { recursive: true });
+    fs.symlinkSync('/etc', path.join(projDir('demo'), 'escape'));
+    const r = await api('/api/projects/demo/files');
+    assert.equal(r.status, 200);
+    const byPath = Object.fromEntries(r.data.entries.map((e) => [e.path, e]));
+    assert.equal(byPath['out/report.md'].size, 4);
+    assert.equal(byPath.escape.type, 'link');
+    assert.equal(byPath.node_modules.skipped, true);
+    assert.ok(!r.data.entries.some((e) => e.path.startsWith('escape/') || e.path.startsWith('node_modules/')));
+    assert.equal((await api('/api/projects/demo/files', { token: OBSERVER })).status, 403);
+  });
+
+  await step('importing an existing folder is confined to the workspace', async () => {
+    const mk = (body) => api('/api/projects', { method: 'POST', body: { title: 'T', ...body } });
+    fs.mkdirSync(path.join(dirs.work, 'existing'), { recursive: true });
+    fs.symlinkSync('/etc', path.join(dirs.work, 'etc-link'));
+    assert.equal((await mk({ slug: 'p1', dir: '/etc' })).status, 403);
+    assert.equal((await mk({ slug: 'p2', dir: path.join(dirs.work, '..') })).status, 403);
+    assert.equal((await mk({ slug: 'p3', dir: path.join(dirs.work, 'etc-link') })).status, 403);
+    assert.equal((await mk({ slug: 'p4', dir: dirs.work })).status, 400, 'a whole workspace root');
+    assert.equal((await mk({ slug: 'p5', dir: path.join(dirs.work, 'missing') })).status, 400);
+    assert.equal((await mk({ slug: '../p6' })).status, 400);
+    const ok = await mk({ slug: 'imported', dir: path.join(dirs.work, 'existing') });
+    assert.equal(ok.status, 201, JSON.stringify(ok.data));
+    assert.equal(ok.data.dir, real(path.join(dirs.work, 'existing')));
+    assert.equal((await mk({ slug: 'p7', dir: path.join(dirs.work, 'existing') })).status, 409, 'one folder, one project');
+    assert.equal((await mk({ slug: 'p8', dir: projDir('demo') })).status, 409);
+    assert.ok(!fs.existsSync(path.join(dirs.work, 'cc-projects', 'p1')), 'nothing created for rejected projects');
   });
 
   await step('permission prompt relayed to UI and verdict returned', async () => {
@@ -268,10 +404,14 @@ try {
     hub.kill('SIGTERM');
     await sleep(500);
     await pool.query("INSERT INTO messages (sender, recipient, body) VALUES ('user', 'eng1', 'sent while hub down')");
+    await pool.query("INSERT INTO projects (slug, title) VALUES ('legacy', 'Made before folders existed')");
     const hub2 = spawn(process.execPath, [path.join(ROOT, 'src', 'hub.mjs')], { env: { ...process.env, ...hubEnv() }, stdio: 'ignore' });
     globalThis.hub2 = hub2;
     await until(async () => (await api('/api/sessions')).data?.find?.((s) => s.name === 'eng1' && s.connected), 'eng1 reconnected', 30000);
     await until(async () => (await thread('eng1')).find((m) => m.body === 'echo: sent while hub down'), 'queued delivery');
+    const legacy = (await api('/api/projects')).data.find((p) => p.slug === 'legacy');
+    assert.equal(legacy.dir, projDir('legacy'), 'legacy project migrated to its own folder');
+    assert.ok(fs.statSync(projDir('legacy')).isDirectory());
   });
 
   await step('machine power-off: lead and workers resume, lead is briefed', async () => {
@@ -288,6 +428,8 @@ try {
     assert.ok(fs.existsSync(path.join(dirs.state, 'worktrees', 'eng1', 'README.md')), 'worktree reused');
     const s = (await api('/api/sessions')).data.find((x) => x.name === 'eng1');
     assert.equal(s.worktree.branch, 'feature/parser');
+    assert.equal(s.expert_title, 'Binary parser engineer', 'expert role survives a restart');
+    assert.match(fs.readFileSync(path.join(dirs.state, 'run', 'eng1.prompt.md'), 'utf8'), /EXPERTISE-MARKER/);
   });
 } finally {
   if (process.env.CCHUB_TEST_KEEP === '1') {

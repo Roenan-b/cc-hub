@@ -111,6 +111,53 @@
   .err { color: var(--bad); font-size: 13px; min-height: 1em; }
   #conn { font-size: 11px; color: var(--dim); } #conn.on { color: var(--good); }
   body.observer .admin-only { display: none !important; }
+  /* project folders in the sidebar */
+  .folder .caret { width: 18px; flex: none; color: var(--dim); text-align: center; border: 0; background: none; padding: 0; font-size: 12px; }
+  .folder.open .caret { transform: rotate(90deg); }
+  .item.child { padding-left: 36px; background: rgba(255,255,255,.015); }
+  .item.child .name { font-weight: 500; font-size: 14px; }
+  /* project tabs */
+  #tabs { display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); overflow-x: auto; }
+  #tabs button { border-radius: 18px; }
+  #tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* live agent view */
+  .live { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 14px; align-items: start; }
+  .phases { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ph { font-size: 12px; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--line); color: var(--dim); }
+  .ph.done { color: var(--text); border-color: var(--good); }
+  .ph.cur { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .graph { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 12px 14px; min-height: 260px; }
+  .graph svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .graph svg path { fill: none; stroke: var(--line); stroke-width: 2; transition: stroke .3s; }
+  .graph svg path.planned { stroke-dasharray: 5 6; }
+  .graph svg path.live { stroke: #3a5a48; }
+  .graph svg path.flash { stroke: var(--accent); stroke-width: 3; }
+  .lead-row { display: flex; justify-content: center; margin-bottom: 44px; position: relative; z-index: 1; }
+  .experts { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; position: relative; z-index: 1; }
+  .node { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; width: 210px; cursor: pointer; transition: border-color .3s, box-shadow .3s; }
+  .node.lead { width: min(440px, 100%); border-color: var(--accent); }
+  .node.planned { border-style: dashed; opacity: .75; cursor: default; }
+  .node.pulse { box-shadow: 0 0 0 3px rgba(217,119,87,.35); }
+  .node .nt { display: flex; gap: 7px; align-items: center; font-weight: 600; font-size: 14px; }
+  .node .nt span.t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .ns { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .node .now { font: 12px/1.35 var(--mono); color: var(--dim); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .thought { font-size: 13px; margin-top: 7px; padding: 7px 9px; background: #0b0d11; border-radius: 9px; font-style: italic; }
+  .tl { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px 12px; max-height: 72dvh; overflow-y: auto; }
+  .tl .filters { display: flex; gap: 5px; flex-wrap: wrap; padding: 6px 0 8px; position: sticky; top: 0; background: var(--panel); }
+  .tl .filters button.on { border-color: var(--accent); color: var(--accent); }
+  .ev2 { padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .ev2 .h { display: flex; gap: 8px; align-items: baseline; }
+  .ev2 time { color: var(--dim); flex: none; font-size: 12px; }
+  .ev2 .k { flex: none; width: 18px; text-align: center; }
+  .ev2 .x { margin: 4px 0 0 26px; white-space: pre-wrap; word-break: break-word; }
+  .ev2 .x.q { font-style: italic; border-left: 2px solid var(--accent); padding-left: 8px; }
+  .ev2 .x.m { font: 12px/1.4 var(--mono); color: var(--dim); }
+  .ev2.new { animation: fadein .6s; }
+  @keyframes fadein { from { background: rgba(217,119,87,.18); } to { background: none; } }
+  .tree .f { font: 12.5px/1.6 var(--mono); display: flex; gap: 10px; }
+  .tree .f .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree .f .z { color: var(--dim); flex: none; }
   @media (max-width: 760px) {
     #app { grid-template-columns: 1fr; }
     #app.in-main aside { display: none; }
@@ -119,6 +166,12 @@
     .msg { max-width: 92%; }
     .cols { grid-template-columns: 1fr; }
     .two { grid-template-columns: 1fr; }
+    .live { grid-template-columns: 1fr; }
+    .node { width: 100%; }
+    .lead-row { margin-bottom: 30px; }
+    .graph svg { display: none; }
+    .lead-row { margin-bottom: 12px; }
+    .experts { border-left: 2px solid var(--line); margin-left: 12px; padding-left: 10px; }
   }
 </style>
 </head>
@@ -149,8 +202,11 @@
       <button class="small admin-only hidden" id="termBtn">Terminal</button>
       <button class="small admin-only hidden" id="moreBtn">⋯</button>
     </header>
+    <div id="tabs" class="hidden"></div>
     <div class="view" id="dashView"></div>
+    <div class="view hidden" id="liveView"></div>
     <div class="view hidden" id="boardView"></div>
+    <div class="view hidden" id="filesView"></div>
     <div class="view hidden" id="chatView"><div id="thread"></div></div>
     <form id="composer" class="hidden admin-only">
       <textarea id="input" rows="1" placeholder="Message…"></textarea>
@@ -173,6 +229,8 @@
     <label>Title <input name="title" required placeholder="CFG + DDG reverse engineering"></label>
   </div>
   <label>Goal / definition of done <textarea name="goal" rows="3"></textarea></label>
+  <label>Folder (optional: an existing folder to import; leave empty to create <span id="projDirHint" class="mono"></span>)
+    <input name="dir" autocapitalize="off" autocorrect="off" placeholder="/home/you/projects/existing-folder"></label>
   <label>Repositories (one absolute path per line, optional) <textarea name="repos" rows="2" autocapitalize="off"></textarea></label>
   <div class="err" id="projErr"></div>
   <div class="row"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Create</button></div>
@@ -217,6 +275,8 @@
 
 <dialog id="moreDlg"><div class="body">
   <h2 id="moreTitle">Session</h2>
+  <label class="admin-only" style="font-size:13px;color:var(--dim);display:flex;flex-direction:column;gap:4px">Project folder for this chat
+    <span style="display:flex;gap:8px"><select id="moveSel"></select><button id="moveBtn">Move</button></span></label>
   <button id="restartBtn">Restart (fresh context)</button>
   <button id="stopBtn">Stop (keep history)</button>
   <button id="forgetBtn" style="color:var(--bad)">Stop and remove from list</button>
@@ -243,7 +303,13 @@ const el = (tag, props = {}, ...kids) => {
 const state = {
   me: null, view: 'dash', current: null, project: null, sessions: [], projects: [], tasks: [],
   messages: new Map(), unread: new Map(), perms: new Map(), dash: null,
+  tab: 'live', pview: null, events: [], filter: 'all', files: null,
 };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode or blocked storage */ } },
+};
+const expanded = new Set(store.get('cchub.expanded', []));
 const isAdmin = () => state.me?.level === 'admin';
 
 async function api(path, opts = {}) {
@@ -292,8 +358,12 @@ const dotClass = (s) => (s.flags?.usage_limit || (s.flags?.stalled && s.status !
 // ---------- navigation
 function show(view) {
   state.view = view;
+  const inProj = view === 'project';
+  $('#tabs').classList.toggle('hidden', !inProj);
   $('#dashView').classList.toggle('hidden', view !== 'dash');
-  $('#boardView').classList.toggle('hidden', view !== 'board');
+  $('#liveView').classList.toggle('hidden', !(inProj && state.tab === 'live'));
+  $('#boardView').classList.toggle('hidden', !(inProj && state.tab === 'board'));
+  $('#filesView').classList.toggle('hidden', !(inProj && state.tab === 'files'));
   $('#chatView').classList.toggle('hidden', view !== 'chat');
   $('#composer').classList.toggle('hidden', view !== 'chat' || !isAdmin());
   $('#termBtn').classList.toggle('hidden', view !== 'chat');
@@ -303,30 +373,54 @@ function show(view) {
 }
 $('#back').onclick = () => { $('#app').classList.remove('in-main'); };
 
+function sessionItem(s, child) {
+  const n = state.unread.get(s.name) || 0;
+  const label = s.expert_title || s.template;
+  return el('div', { class: 'item' + (child ? ' child' : '') + (state.view === 'chat' && state.current === s.name ? ' active' : ''), onclick: () => openSession(s.name) },
+    el('span', { class: 'dot ' + dotClass(s) }),
+    el('div', { class: 'meta' },
+      el('div', { class: 'name' }, s.name, ' ', el('span', { class: 'pill' + (s.role === 'orchestrator' ? ' lead' : '') }, label)),
+      el('div', { class: 'sub' }, `${s.connected ? 'online' : s.status} · ${ago(s.last_activity)}`)),
+    n ? el('span', { class: 'badge' }, n) : null);
+}
+function toggleFolder(slug, ev) {
+  ev.stopPropagation();
+  if (expanded.has(slug)) expanded.delete(slug); else expanded.add(slug);
+  store.set('cchub.expanded', [...expanded]);
+  renderNav();
+}
 function renderNav() {
   const nav = $('#nav'); nav.textContent = '';
   nav.append(el('div', { class: 'item' + (state.view === 'dash' ? ' active' : ''), onclick: openDash },
     el('div', { class: 'meta' }, el('div', { class: 'name' }, 'Dashboard'), el('div', { class: 'sub' }, 'Everything at a glance'))));
+  const leads = state.sessions.filter((s) => s.role === 'orchestrator');
+  for (const s of leads) nav.append(sessionItem(s, false));
   nav.append(el('div', { class: 'section' }, el('span', {}, 'Projects')));
   if (!state.projects.length) nav.append(el('div', { class: 'item dim' }, 'No projects yet'));
+  const filed = new Set(state.projects.map((p) => p.slug));
   for (const p of state.projects) {
     const c = p.task_counts || {}; const total = Object.values(c).reduce((a, b) => a + b, 0);
-    nav.append(el('div', { class: 'item' + (state.view === 'board' && state.project === p.slug ? ' active' : ''), onclick: () => openBoard(p.slug) },
-      el('div', { class: 'meta' }, el('div', { class: 'name' }, p.title), el('div', { class: 'sub' }, `${p.status} · ${c.done || 0}/${total} done`))));
+    const kids = state.sessions.filter((s) => s.project === p.slug && s.role !== 'orchestrator');
+    const open = expanded.has(p.slug) || (state.view === 'chat' && kids.some((k) => k.name === state.current));
+    const unread = kids.reduce((a, k) => a + (state.unread.get(k.name) || 0), 0);
+    nav.append(el('div', { class: 'item folder' + (open ? ' open' : '') + (state.view === 'project' && state.project === p.slug ? ' active' : ''), onclick: () => openProject(p.slug) },
+      el('button', { class: 'caret', type: 'button', 'aria-label': open ? 'Collapse' : 'Expand', 'aria-expanded': String(open), onclick: (ev) => toggleFolder(p.slug, ev) }, '▸'),
+      el('div', { class: 'meta' }, el('div', { class: 'name' }, p.title),
+        el('div', { class: 'sub' }, `${p.status} · ${c.done || 0}/${total} done · ${kids.filter((k) => k.status !== 'stopped').length} agents`)),
+      !open && unread ? el('span', { class: 'badge' }, unread) : null));
+    if (open) {
+      if (!kids.length) nav.append(el('div', { class: 'item child dim' }, 'No chats yet'));
+      for (const k of kids) nav.append(sessionItem(k, true));
+    }
   }
-  nav.append(el('div', { class: 'section' }, el('span', {}, 'Sessions')));
-  for (const s of state.sessions) {
-    const n = state.unread.get(s.name) || 0;
-    nav.append(el('div', { class: 'item' + (state.view === 'chat' && state.current === s.name ? ' active' : ''), onclick: () => openSession(s.name) },
-      el('span', { class: 'dot ' + dotClass(s) }),
-      el('div', { class: 'meta' },
-        el('div', { class: 'name' }, s.name, ' ', el('span', { class: 'pill' + (s.role === 'orchestrator' ? ' lead' : '') }, s.template)),
-        el('div', { class: 'sub' }, `${s.connected ? 'online' : s.status}${s.project ? ' · ' + s.project : ''} · ${ago(s.last_activity)}`)),
-      n ? el('span', { class: 'badge' }, n) : null));
+  const unfiled = state.sessions.filter((s) => s.role !== 'orchestrator' && !(s.project && filed.has(s.project)));
+  if (unfiled.length) {
+    nav.append(el('div', { class: 'section' }, el('span', {}, 'Unfiled chats')));
+    for (const s of unfiled) nav.append(sessionItem(s, false));
   }
   const cur = state.sessions.find((s) => s.name === state.current);
   if (state.view === 'chat' && cur) {
-    $('#curInfo').textContent = `${cur.template} · ${cur.connected ? 'online' : cur.status} · ${cur.worktree?.branch ? 'branch ' + cur.worktree.branch + ' · ' : ''}${cur.cwd}`;
+    $('#curInfo').textContent = `${cur.expert_title ? cur.expert_title + ' · ' : ''}${cur.template} · ${cur.connected ? 'online' : cur.status} · ${cur.project ? 'project ' + cur.project + ' · ' : ''}${cur.worktree?.branch ? 'branch ' + cur.worktree.branch + ' · ' : ''}${cur.cwd || ''}`;
   }
 }
 
@@ -358,7 +452,7 @@ function renderDash() {
   for (const p of d.projects) {
     const c = p.task_counts || {}; const total = Object.values(c).reduce((a, b) => a + b, 0) || 1;
     const seg = (k, color) => el('span', { style: `width:${((c[k] || 0) / total) * 100}%;background:${color}` });
-    pg.append(el('div', { class: 'box', onclick: () => openBoard(p.slug) },
+    pg.append(el('div', { class: 'box', onclick: () => openProject(p.slug) },
       el('div', { class: 'row1' }, el('b', {}, p.title), el('span', { class: 'pill' }, p.status)),
       el('div', { class: 'bar' }, seg('done', 'var(--good)'), seg('review', 'var(--info)'), seg('in_progress', 'var(--accent)'), seg('blocked', 'var(--bad)')),
       el('div', { class: 'dim', style: 'font-size:12px' }, ['done', 'review', 'in_progress', 'blocked', 'todo'].filter((k) => c[k]).map((k) => `${c[k]} ${k.replace('_', ' ')}`).join(' · ') || 'no tasks yet')));
@@ -389,12 +483,204 @@ function renderDash() {
 }
 
 // ---------- board
-async function openBoard(slug) {
-  state.project = slug; const p = state.projects.find((x) => x.slug === slug);
-  $('#curName').textContent = p ? p.title : slug; $('#curInfo').textContent = p ? `${p.status} · ${p.goal || ''}` : '';
-  show('board');
-  state.tasks = await api(`/api/projects/${slug}/tasks`);
-  renderBoard();
+const openBoard = (slug) => openProject(slug, 'board');
+async function openProject(slug, tab) {
+  const switching = state.project !== slug || state.view !== 'project';
+  state.project = slug;
+  state.tab = tab || (switching ? 'live' : state.tab);
+  if (state.tab === 'files' && !isAdmin()) state.tab = 'live';
+  const p = state.projects.find((x) => x.slug === slug);
+  $('#curName').textContent = p ? p.title : slug;
+  $('#curInfo').textContent = p ? [p.status, p.dir, p.goal].filter(Boolean).join(' · ') : '';
+  renderTabs();
+  show('project');
+  if (switching) { state.pview = null; state.events = []; state.files = null; }
+  if (state.tab === 'live') await loadLive(slug);
+  else if (state.tab === 'board') { state.tasks = await api(`/api/projects/${slug}/tasks`); renderBoard(); }
+  else if (state.tab === 'files') await loadFiles(slug);
+}
+function renderTabs() {
+  const t = $('#tabs'); t.textContent = '';
+  for (const [k, label] of [['live', 'Live'], ['board', 'Board'], ['files', 'Files']]) {
+    if (k === 'files' && !isAdmin()) continue;
+    t.append(el('button', { class: 'small' + (state.tab === k ? ' on' : ''), type: 'button', onclick: () => openProject(state.project, k) }, label));
+  }
+}
+
+// ---------- live agent view
+const KIND_ICON = { thinking: '💭', progress: '📈', team_plan: '🧭', spawn: '🚀', stop: '⏹', status: '•', tool: '🔧', task: '☑', approval: '✋', message: '✉', project: '📁' };
+const FILTERS = [['all', 'All', null], ['thinking', 'Thinking', ['thinking', 'progress']], ['team', 'Team', ['team_plan', 'spawn', 'stop', 'status', 'project']],
+  ['tools', 'Tools', ['tool']], ['tasks', 'Tasks', ['task', 'approval']], ['messages', 'Messages', ['message']]];
+async function loadLive(slug) {
+  const [view, events] = await Promise.all([api(`/api/projects/${slug}`), api(`/api/projects/${slug}/events?limit=300`)]);
+  if (state.project !== slug) return;
+  state.pview = view; state.events = events;
+  renderLive();
+}
+function projectSessions() {
+  return state.sessions.filter((s) => s.project === state.project && s.role !== 'orchestrator');
+}
+function latestFor(name, kinds) {
+  for (let i = state.events.length - 1; i >= 0; i--) { const e = state.events[i]; if (e.session === name && kinds.includes(e.kind)) return e; }
+  return null;
+}
+function currentPhase() {
+  for (let i = state.events.length - 1; i >= 0; i--) { const ph = state.events[i].detail?.phase; if (ph) return ph; }
+  if (projectSessions().some((s) => s.status !== 'stopped')) return 'build';
+  if (state.pview?.team_plan) return 'staff';
+  return state.events.length ? 'understand' : null;
+}
+function renderLive() {
+  const v = $('#liveView'); v.textContent = '';
+  if (!state.pview) { v.append(el('div', { class: 'dim' }, 'Loading…')); return; }
+  const phases = ['understand', 'plan', 'approve', 'staff', 'build', 'review', 'report'];
+  const cur = phases.indexOf(currentPhase());
+  v.append(el('div', { class: 'phases', role: 'list', 'aria-label': 'Project phase' },
+    phases.map((ph, i) => el('span', { class: 'ph' + (i === cur ? ' cur' : i < cur ? ' done' : ''), role: 'listitem' }, ph))));
+  const graph = el('div', { class: 'graph', id: 'graph' });
+  const tl = el('div', { class: 'tl', id: 'timeline' });
+  v.append(el('div', { class: 'live' }, graph, tl));
+  renderGraph(); renderTimeline();
+}
+function nodeEl(s, slot) {
+  const title = slot?.title || s?.expert_title || s?.template || '';
+  if (!s) {
+    return el('div', { class: 'node planned', dataset: { key: slot.key } },
+      el('div', { class: 'nt' }, el('span', { class: 'dot' }), el('span', { class: 't' }, title)),
+      el('div', { class: 'ns' }, `planned · ${slot.template} · not started`));
+  }
+  const now = latestFor(s.name, ['tool', 'progress', 'status']);
+  const nowText = now ? (now.kind === 'tool' ? `${now.detail?.tool || 'tool'} ${now.text || ''}` : now.kind === 'progress' && now.text ? now.text : now.summary) : 'no activity yet';
+  return el('div', { class: 'node', dataset: { session: s.name, ...(s.expert_key ? { key: s.expert_key } : {}) }, onclick: () => openSession(s.name), title: `Open ${s.name}` },
+    el('div', { class: 'nt' }, el('span', { class: 'dot ' + dotClass(s) }), el('span', { class: 't' }, title)),
+    el('div', { class: 'ns' }, `${s.name} · ${s.template} · ${s.connected ? 'online' : s.status}`),
+    el('div', { class: 'now' }, 'now: ', nowText));
+}
+function renderGraph() {
+  const g = $('#graph'); if (!g) return;
+  g.textContent = '';
+  const lead = state.sessions.find((s) => s.role === 'orchestrator' && s.status !== 'stopped') || state.sessions.find((s) => s.role === 'orchestrator');
+  const thought = [...state.events].reverse().find((e) => e.kind === 'thinking');
+  const leadCard = el('div', { class: 'node lead', dataset: { session: lead?.name || '' }, onclick: () => lead && openSession(lead.name) },
+    el('div', { class: 'nt' }, el('span', { class: 'dot ' + (lead ? dotClass(lead) : '') }), el('span', { class: 't' }, lead ? `${lead.name} · lead` : 'No lead running')),
+    el('div', { class: 'ns' }, state.pview?.team_plan ? state.pview.team_plan.summary : 'Has not planned a team for this project yet'),
+    thought ? el('div', { class: 'thought' }, thought.text || thought.summary) : null);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('aria-hidden', 'true');
+  g.append(svg, el('div', { class: 'lead-row' }, leadCard));
+  const sessions = projectSessions();
+  const used = new Set();
+  const cards = [];
+  for (const slot of state.pview?.team_plan?.detail?.experts || []) {
+    const s = sessions.find((x) => x.expert_key === slot.key && x.status !== 'stopped') || sessions.find((x) => x.expert_key === slot.key);
+    if (s) used.add(s.name);
+    cards.push(nodeEl(s, slot));
+  }
+  for (const s of sessions) if (!used.has(s.name)) cards.push(nodeEl(s, null));
+  const row = el('div', { class: 'experts' }, cards.length ? cards : el('div', { class: 'dim' }, 'No experts yet. When the lead plans a team, each expert appears here, then fills in when it starts.'));
+  g.append(row);
+  requestAnimationFrame(drawLinks);
+}
+function drawLinks() {
+  const g = $('#graph'); if (!g) return;
+  const svg = g.querySelector('svg'); const lead = g.querySelector('.node.lead');
+  if (!svg || !lead) return;
+  svg.textContent = '';
+  const box = g.getBoundingClientRect(); const lb = lead.getBoundingClientRect();
+  const x0 = lb.left + lb.width / 2 - box.left; const y0 = lb.bottom - box.top;
+  for (const n of g.querySelectorAll('.experts .node')) {
+    const b = n.getBoundingClientRect();
+    const x1 = b.left + b.width / 2 - box.left; const y1 = b.top - box.top;
+    const mid = (y0 + y1) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${x0},${y0} C${x0},${mid} ${x1},${mid} ${x1},${y1}`);
+    path.setAttribute('class', n.classList.contains('planned') ? 'planned' : 'live');
+    if (n.dataset.session) path.dataset.session = n.dataset.session;
+    svg.append(path);
+  }
+}
+if ('ResizeObserver' in window) new ResizeObserver(() => { if (state.view === 'project' && state.tab === 'live') drawLinks(); }).observe($('#liveView'));
+else addEventListener('resize', () => drawLinks());
+function pulse(name) {
+  const g = $('#graph'); if (!g || !name) return;
+  for (const x of g.querySelectorAll(`[data-session="${CSS.escape(name)}"]`)) {
+    const cls = x.tagName.toLowerCase() === 'path' ? 'flash' : 'pulse';
+    x.classList.add(cls); setTimeout(() => x.classList.remove(cls), 1200);
+  }
+}
+function eventEl(e, fresh) {
+  const textClass = e.kind === 'thinking' || e.kind === 'progress' ? 'x q' : e.kind === 'tool' ? 'x m' : 'x';
+  const showText = e.text && e.kind !== 'message' ? e.text : e.kind === 'message' && e.text ? e.text : '';
+  return el('div', { class: 'ev2' + (fresh ? ' new' : ''), dataset: { kind: e.kind } },
+    el('div', { class: 'h' }, el('time', {}, fmtTime(e.ts)), el('span', { class: 'k', 'aria-hidden': 'true' }, KIND_ICON[e.kind] || '•'),
+      el('span', {}, e.kind === 'tool' ? `${e.session} used ${e.detail?.tool || 'a tool'}` : e.summary)),
+    showText ? el('div', { class: textClass }, showText.length > 600 ? showText.slice(0, 599) + '…' : showText) : null);
+}
+const passes = (e) => { const f = FILTERS.find(([k]) => k === state.filter); return !f?.[2] || f[2].includes(e.kind); };
+function renderTimeline() {
+  const t = $('#timeline'); if (!t) return;
+  t.textContent = '';
+  t.append(el('div', { class: 'filters' }, FILTERS.map(([k, label]) =>
+    el('button', { class: 'small' + (state.filter === k ? ' on' : ''), type: 'button', onclick: () => { state.filter = k; renderTimeline(); } }, label))));
+  const list = el('div', { id: 'tlist' });
+  const shown = state.events.filter(passes).reverse();
+  if (!shown.length) list.append(el('div', { class: 'dim', style: 'padding:10px 0' }, 'Nothing here yet. Activity shows up live as the lead and its experts work.'));
+  for (const e of shown) list.append(eventEl(e, false));
+  t.append(list);
+  if (state.events.length >= 300) {
+    t.append(el('button', { class: 'small', type: 'button', style: 'margin:8px 0', onclick: loadOlder }, 'Load older'));
+  }
+}
+async function loadOlder() {
+  const first = state.events[0]; if (!first) return;
+  const older = await api(`/api/projects/${state.project}/events?before=${first.id}&limit=300`);
+  state.events = [...older, ...state.events]; renderTimeline();
+}
+let graphTimer = null;
+function onAgentEvent(e) {
+  if (state.view !== 'project' || e.project !== state.project || !state.pview) return;
+  if (state.events.some((x) => x.id === e.id)) return;
+  state.events.push(e);
+  if (state.events.length > 2000) state.events.splice(0, state.events.length - 2000);
+  if (e.kind === 'team_plan') state.pview.team_plan = e;
+  if (state.tab !== 'live') return;
+  const list = $('#tlist');
+  if (list && passes(e)) { list.querySelector('.dim')?.remove(); list.prepend(eventEl(e, true)); }
+  clearTimeout(graphTimer);
+  graphTimer = setTimeout(() => {
+    const phases = $('#liveView .phases');
+    if (phases) { const ph = currentPhase(); phases.querySelectorAll('.ph').forEach((x, i, all) => { const cur = [...all].findIndex((y) => y.textContent === ph); x.className = 'ph' + (i === cur ? ' cur' : i < cur ? ' done' : ''); }); }
+    renderGraph(); requestAnimationFrame(() => pulse(e.session));
+  }, 150);
+}
+
+// ---------- files
+async function loadFiles(slug) {
+  const v = $('#filesView'); v.textContent = ''; v.append(el('div', { class: 'dim' }, 'Loading…'));
+  const f = await api(`/api/projects/${slug}/files`);
+  if (state.project !== slug) return;
+  state.files = f; renderFiles();
+}
+const fmtSize = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+function renderFiles() {
+  const v = $('#filesView'); v.textContent = '';
+  const f = state.files;
+  v.append(el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;margin-bottom:10px' },
+    el('span', { class: 'mono dim' }, f.dir || 'No folder for this project'),
+    el('button', { class: 'small', type: 'button', onclick: () => loadFiles(state.project) }, 'Refresh')));
+  if (f.missing) { v.append(el('div', { class: 'dim' }, f.dir ? 'The folder does not exist right now.' : 'This project has no working folder.')); return; }
+  if (!f.entries.length) { v.append(el('div', { class: 'dim' }, 'The folder is empty. Files the experts create will appear here.')); return; }
+  const tree = el('div', { class: 'tree' });
+  for (const x of f.entries) {
+    const depth = x.path.split('/').length - 1;
+    const name = x.path.split('/').pop();
+    const note = x.type === 'dir' ? (x.skipped ? 'not listed' : x.deeper ? '…' : '') : x.type === 'link' ? 'link, not followed' : fmtSize(x.size);
+    tree.append(el('div', { class: 'f', style: `padding-left:${depth * 16}px` },
+      el('span', { class: 'n' }, x.type === 'dir' ? '📁 ' : x.type === 'link' ? '🔗 ' : '📄 ', name, x.type === 'dir' ? '/' : ''),
+      el('span', { class: 'z' }, note)));
+  }
+  v.append(tree);
+  if (f.truncated) v.append(el('div', { class: 'dim', style: 'margin-top:8px' }, 'Only the first 1000 entries are shown.'));
 }
 function renderBoard() {
   const v = $('#boardView'); v.textContent = '';
@@ -517,12 +803,15 @@ $('#input').addEventListener('keydown', (e) => {
 // ---------- dialogs
 document.querySelectorAll('[data-close]').forEach((b) => (b.onclick = (e) => { e.preventDefault(); b.closest('dialog').close(); }));
 $('#newBtn').onclick = () => $('#newDlg').showModal();
-$('#newProjectBtn').onclick = () => { $('#newDlg').close(); $('#projErr').textContent = ''; $('#projDlg').showModal(); };
+const dirHint = () => { $('#projDirHint').textContent = `${state.me.projects_dir || '<projects folder>'}/${$('#projForm').elements.slug.value || '<slug>'}`; };
+$('#projForm').elements.slug.addEventListener('input', dirHint);
+$('#newProjectBtn').onclick = () => { $('#newDlg').close(); $('#projErr').textContent = ''; dirHint(); $('#projDlg').showModal(); };
 $('#projForm').onsubmit = async (e) => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
   f.repos = f.repos.split('\n').map((s) => s.trim()).filter(Boolean);
-  try { const p = await api('/api/projects', { method: 'POST', body: f }); $('#projDlg').close(); e.target.reset(); await refreshProjects(); openBoard(p.slug); }
+  if (!f.dir.trim()) delete f.dir;
+  try { const p = await api('/api/projects', { method: 'POST', body: f }); $('#projDlg').close(); e.target.reset(); await refreshProjects(); openProject(p.slug, 'live'); }
   catch (err) { $('#projErr').textContent = err.message; }
 };
 $('#newSessionBtn').onclick = () => {
@@ -532,9 +821,9 @@ $('#newSessionBtn').onclick = () => {
   fill(f.template, state.me.templates.filter((t) => t !== 'lead').map((t) => [t, t]));
   f.template.value = 'general';
   fill(f.project, state.projects.map((p) => [p.slug, p.title]), 'no project');
-  if (state.view === 'board') f.project.value = state.project;
+  if (state.view === 'project') f.project.value = state.project;
   fill(f.permission_mode, state.me.permission_modes.map((m) => [m, m]));
-  f.cwd.placeholder = (state.me.roots[0] || '/home/you') + '/project';
+  f.cwd.placeholder = 'Leave empty to use the project folder';
   $('#sessErr').textContent = ''; $('#sessDlg').showModal();
 };
 $('#sessForm').onsubmit = async (e) => {
@@ -556,7 +845,22 @@ $('#termBtn').onclick = async () => {
   $('#termDlg').showModal(); refreshPane().catch((e) => ($('#pane').textContent = e.message));
 };
 $('#termRefresh').onclick = () => refreshPane();
-$('#moreBtn').onclick = () => { $('#moreTitle').textContent = state.current; $('#moreDlg').showModal(); };
+$('#moreBtn').onclick = () => {
+  $('#moreTitle').textContent = state.current;
+  const s = state.sessions.find((x) => x.name === state.current);
+  const sel = $('#moveSel'); sel.textContent = '';
+  sel.append(el('option', { value: '' }, 'Unfiled'));
+  for (const p of state.projects) sel.append(el('option', { value: p.slug }, p.title));
+  sel.value = s?.project || '';
+  const lead = s?.role === 'orchestrator';
+  sel.disabled = lead; $('#moveBtn').disabled = lead;
+  $('#moreDlg').showModal();
+};
+$('#moveBtn').onclick = async () => {
+  const project = $('#moveSel').value || null;
+  try { await api(`/api/sessions/${state.current}`, { method: 'PATCH', body: { project } }); if (project) { expanded.add(project); store.set('cchub.expanded', [...expanded]); } $('#moreDlg').close(); }
+  catch (err) { alert(err.message); }
+};
 $('#restartBtn').onclick = async () => { if (confirm(`Restart ${state.current}? Its context is cleared; history stays searchable.`)) { await api(`/api/sessions/${state.current}/restart`, { method: 'POST', body: {} }).catch((e) => alert(e.message)); $('#moreDlg').close(); } };
 $('#stopBtn').onclick = async () => { if (confirm(`Stop ${state.current}?`)) { await api(`/api/sessions/${state.current}`, { method: 'DELETE' }).catch((e) => alert(e.message)); $('#moreDlg').close(); } };
 $('#forgetBtn').onclick = async () => { if (confirm(`Stop and remove ${state.current}? Messages stay in the database.`)) { await api(`/api/sessions/${state.current}?forget=1`, { method: 'DELETE' }).catch((e) => alert(e.message)); $('#moreDlg').close(); openDash(); } };
@@ -585,14 +889,18 @@ function connectWS() {
   ws.onclose = () => { $('#conn').textContent = '○ reconnecting'; $('#conn').className = ''; setTimeout(connectWS, 2000); };
   ws.onmessage = async (ev) => {
     const e = JSON.parse(ev.data);
-    if (e.type === 'sessions') { state.sessions = e.sessions; renderNav(); refreshDashSoon(); }
+    if (e.type === 'sessions') {
+      state.sessions = e.sessions; renderNav(); refreshDashSoon();
+      if (state.view === 'project' && state.tab === 'live' && state.pview) renderGraph();
+    }
+    else if (e.type === 'agent_event') onAgentEvent(e.event);
     else if (e.type === 'permissions') { for (const p of e.pending) state.perms.set(`${p.session}:${p.request_id}`, p); }
     else if (e.type === 'delivered') { document.querySelectorAll(`[data-pending-for="${e.id}"]`).forEach((x) => x.remove()); }
     else if (e.type === 'projects') { await refreshProjects(); refreshDashSoon(); }
     else if (e.type === 'approvals') { state.dash = await api('/api/dashboard'); if (state.view === 'dash') renderDash(); }
     else if (e.type === 'task') {
       refreshProjects(); refreshDashSoon();
-      if (state.view === 'board' && e.task.project === state.project) {
+      if (state.view === 'project' && state.tab === 'board' && e.task.project === state.project) {
         state.tasks = await api(`/api/projects/${state.project}/tasks`); renderBoard();
       }
     } else if (e.type === 'message') {

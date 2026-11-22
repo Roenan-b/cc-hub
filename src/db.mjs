@@ -67,7 +67,7 @@ export async function searchMessages({ query, session = null, limit = 20 }) {
 export async function listSessions() {
   const { rows } = await pool.query(
     `SELECT s.name, s.role, s.template, s.project, s.cwd, s.worktree, s.permission_mode, s.status,
-            s.created_by, s.created_at, s.last_seen, s.last_activity
+            s.created_by, s.created_at, s.last_seen, s.last_activity, s.expertise, s.expert_key, s.expert_title
      FROM sessions s ORDER BY (s.role = 'orchestrator') DESC, s.created_at`,
   );
   return rows;
@@ -80,12 +80,14 @@ export async function getSession(name) {
 
 export async function upsertSession(s) {
   await pool.query(
-    `INSERT INTO sessions (name, role, cwd, permission_mode, secret_hash, status, created_by, template, project, worktree, last_activity)
-     VALUES ($1, $2, $3, $4, $5, 'starting', $6, $7, $8, $9, now())
+    `INSERT INTO sessions (name, role, cwd, permission_mode, secret_hash, status, created_by, template, project, worktree,
+                           expertise, expert_key, expert_title, last_activity)
+     VALUES ($1, $2, $3, $4, $5, 'starting', $6, $7, $8, $9, $10, $11, $12, now())
      ON CONFLICT (name) DO UPDATE SET role = $2, cwd = $3, permission_mode = $4, secret_hash = $5,
        status = 'starting', created_by = $6, template = $7, project = $8, worktree = $9,
-       created_at = now(), last_activity = now()`,
-    [s.name, s.role, s.cwd, s.permissionMode, s.secretHash, s.createdBy, s.template, s.project, s.worktree],
+       expertise = $10, expert_key = $11, expert_title = $12, created_at = now(), last_activity = now()`,
+    [s.name, s.role, s.cwd, s.permissionMode, s.secretHash, s.createdBy, s.template, s.project, s.worktree,
+      s.expertise || '', s.expertKey || null, s.expertTitle || null],
   );
 }
 
@@ -105,13 +107,29 @@ export async function deleteSession(name) {
   await pool.query('DELETE FROM sessions WHERE name = $1', [name]);
 }
 
+/** File a session (and so its chat history) under a project, or unfile it with null. */
+export async function setSessionProject(name, project) {
+  const { rows } = await pool.query('UPDATE sessions SET project = $2 WHERE name = $1 RETURNING name, project', [name, project]);
+  return rows[0] || null;
+}
+
 // ---------------------------------------------------------------- projects
-export async function createProject({ slug, title, goal, repos, createdBy }) {
+export async function createProject({ slug, title, goal, repos, createdBy, dir }) {
   const { rows } = await pool.query(
-    `INSERT INTO projects (slug, title, goal, repos, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [slug, title, goal, repos, createdBy],
+    `INSERT INTO projects (slug, title, goal, repos, created_by, dir) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [slug, title, goal, repos, createdBy, dir],
   );
   return rows[0];
+}
+
+export async function setProjectDir(slug, dir) {
+  const { rows } = await pool.query('UPDATE projects SET dir = $2, updated_at = now() WHERE slug = $1 RETURNING *', [slug, dir]);
+  return rows[0] || null;
+}
+
+export async function projectByDir(dir) {
+  const { rows } = await pool.query('SELECT * FROM projects WHERE dir = $1', [dir]);
+  return rows[0] || null;
 }
 
 export async function updateProject(slug, { status, goal, title }) {
@@ -228,6 +246,44 @@ export async function activity({ limit = 60, includeBodies = true } = {}) {
     [limit, includeBodies],
   );
   return rows;
+}
+
+// ---------------------------------------------------------------- agent events
+const EVENT_COLS = 'id, ts, project, session, kind, summary, text, detail';
+
+export async function insertEvent({ project = null, session, kind, summary, text = '', detail = {} }) {
+  const { rows } = await pool.query(
+    `INSERT INTO agent_events (project, session, kind, summary, text, detail) VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING ${EVENT_COLS}`,
+    [project, session, kind, summary, text, detail],
+  );
+  return rows[0];
+}
+
+/** Events for one project (or all when project is null), oldest first. */
+export async function listEvents({ project = null, afterId = null, beforeId = null, limit = 200 } = {}) {
+  const { rows } = await pool.query(
+    `SELECT ${EVENT_COLS} FROM agent_events
+     WHERE ($1::text IS NULL OR project = $1) AND ($2::bigint IS NULL OR id > $2) AND ($3::bigint IS NULL OR id < $3)
+     ORDER BY id ${afterId ? 'ASC' : 'DESC'} LIMIT $4`,
+    [project, afterId, beforeId, Math.min(Math.max(1, limit), 1000)],
+  );
+  return afterId ? rows : rows.reverse();
+}
+
+export async function latestTeamPlan(project) {
+  const { rows } = await pool.query(
+    `SELECT ${EVENT_COLS} FROM agent_events WHERE project = $1 AND kind = 'team_plan' ORDER BY id DESC LIMIT 1`, [project],
+  );
+  return rows[0] || null;
+}
+
+/** Tool-use events are high volume; keep them for `days`. Everything else is kept. */
+export async function pruneToolEvents(days) {
+  const { rowCount } = await pool.query(
+    `DELETE FROM agent_events WHERE kind = 'tool' AND ts < now() - make_interval(days => $1)`, [days],
+  );
+  return rowCount;
 }
 
 export async function stats() {

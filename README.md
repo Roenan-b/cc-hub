@@ -34,6 +34,8 @@ cc-hub turns [Claude Code](https://code.claude.com) into a team: a **lead** sess
 | **Two kinds of memory** | Postgres keeps every message forever with full-text search ("search the history for what we decided about X"). The Obsidian vault keeps the curated knowledge: one folder per project (plan, decisions, task notes, daily reports, sources), linked into a shared `Knowledge/` graph. The vault is auto-committed to git. |
 | **Runs while you sleep** | A watchdog reads every terminal, detects stalls, open dialogs, and usage limits, and gives the lead periodic board check-ins so it keeps starting unblocked work, assigning reviews, and restarting stuck workers. Every evening the lead writes a daily report. |
 | **You stay in control** | Plan approval, risky steps, and tool permission prompts reach your phone as Approve / Deny cards. Roles are enforced by the hub, not by trusting the model. |
+| **Project folders** | Every project has its own working folder (created under `HUB_PROJECTS_DIR`, or an existing folder you import) and its chats are grouped under it in the sidebar. Sessions started for a project begin in its folder. Chats can be moved between projects; older projects get a folder on first start. |
+| **Live agent view** | Each project has a **Live** tab: the lead's current thinking, the phase it is in (understand, plan, approve, staff, build, review, report), the team of experts it planned as cards that fill in as each agent starts, what every agent is doing right now, and a filterable timeline of thoughts, team changes, tool calls, tasks and messages. It updates over the existing WebSocket as things happen. |
 | **Observer dashboard** | A second, read-only login shows projects, boards, agent status, and live activity without exposing message text or any controls. Safe to share. |
 
 ## Quick start
@@ -98,8 +100,17 @@ Appended to each session's system prompt, so they survive context compaction. Ed
 | `general` | Anything else | in_progress, review, blocked |
 
 ### Tools each session gets (via the channel)
-All sessions: `reply`, `send_message`, `list_sessions`, `search_history`, `read_history`, `request_approval`, `project_list`, `task_list`, `task_get`, `task_create`, `task_update`.
-Lead only: `project_create`, `project_update`, `spawn_session`, `stop_session`, `restart_session`, `peek_session`, `send_keys`.
+All sessions: `reply`, `send_message`, `list_sessions`, `search_history`, `read_history`, `request_approval`, `project_list`, `task_list`, `task_get`, `task_create`, `task_update`, `share_progress`.
+Lead only: `project_create`, `project_update`, `plan_team`, `spawn_session`, `stop_session`, `restart_session`, `peek_session`, `send_keys`.
+
+`share_progress` posts a short thought or progress note (with a phase) to the project's live view; it notifies no one. `plan_team` records the experts the lead decided the project needs (key, title, template, expertise, why); `spawn_session(expert_key=..., expertise=...)` then starts each one briefed as that expert.
+
+### Project folders and the live view
+- A project's working folder is `HUB_PROJECTS_DIR/<slug>` (default `<first workspace root>/cc-projects/<slug>`), or an existing folder passed as `dir` to `project_create` or in the New project dialog. Imports must be inside a workspace root, cannot be a workspace root itself or overlap the hub's state or vault, and one folder belongs to one project.
+- Events shown in the live view come from three places: the hub itself (spawns, stops, status, tasks, approvals, messages), the lead and workers (`share_progress`, `plan_team`), and a Claude Code hook the hub adds to each session's settings that records which tool was called with a one-line preview (secrets masked). Set `HUB_ACTIVITY_HOOKS=0` to turn the hook off.
+- Tool-call events are pruned after `HUB_EVENT_RETENTION_DAYS`; other events are kept.
+- The **Files** tab (admin only) lists names, sizes and dates in the project folder. It never serves file contents and never follows symlinks.
+- Design notes: [docs/DESIGN-project-folders-live-view.md](docs/DESIGN-project-folders-live-view.md).
 
 ### Vault layout
 ```
@@ -120,24 +131,28 @@ Everything is in `.env`; see [.env.example](.env.example) for every option with 
 src/hub.mjs        HTTP API, WebSockets, agent RPC, auth (admin / observer)
 src/core.mjs       sessions, projects, tasks, approvals, messaging, role enforcement
 src/channel.mjs    MCP channel server loaded by every Claude session
-src/watchdog.mjs   activity, stall and usage-limit detection, check-ins, daily report, vault commits
+src/watchdog.mjs   activity, stall and usage-limit detection, check-ins, daily report, vault commits, event pruning
+src/events.mjs     live-view helpers: secret masking, tool previews, team plan validation, observer redaction
+src/activity-hook.mjs  Claude Code hook that records tool calls for the live view
+src/projectfs.mjs  read-only listing of a project folder for the Files tab
 src/tmux.mjs       tmux control and startup-dialog auto-accept
 src/git.mjs        worktrees and vault commits
 src/vault.mjs      vault and project scaffolding
 db/schema.sql      Postgres schema (applied on every start, idempotent)
-public/index.html  dashboard, boards, chat, approvals (no build step)
+public/index.html  dashboard, project folders, live view, boards, files, chat, approvals (no build step)
 roles/             role briefs   settings/   permission presets   vault-template/
 deploy/            systemd unit, Windows bootstrap and autostart   docs/   setup guides
-test/              end-to-end suite with a stand-in Claude CLI
+test/              unit tests and an end-to-end suite with a stand-in Claude CLI
 ```
 
 ## Testing
 
-The suite runs a real hub, Postgres, tmux, and git with a stand-in `claude` (`test/fake-claude.mjs`) that speaks the same MCP and channel protocol. It covers the full team loop (project, approval, board, worktree spawn, assignment, review, unblocking), role enforcement, permission relay, watchdog check-ins, vault commits, observer redaction, auth and input rejection, and hub restarts with queued delivery.
+The suite runs a real hub, Postgres, tmux, and git with a stand-in `claude` (`test/fake-claude.mjs`) that speaks the same MCP and channel protocol. It covers the full team loop (project, approval, board, worktree spawn, assignment, review, unblocking), project folders (create, import confinement, backfill, filing chats), the live view's event stream (lead thinking, team plans, expert spawns, hook-reported tool calls with secrets masked, live WebSocket delivery and observer redaction), role enforcement, permission relay, watchdog check-ins, vault commits, observer redaction, auth and input rejection, and hub restarts with queued delivery.
 
 ```bash
 createdb cchub_test   # any Postgres; the name must contain "test" (it is wiped)
 TEST_DATABASE_URL=postgres://localhost/cchub_test npm test
+npm run test:unit   # helpers only, no database or tmux needed
 CCHUB_TEST_KEEP=1 TEST_DATABASE_URL=... npm test   # keep the demo hub running to click around
 ```
 
